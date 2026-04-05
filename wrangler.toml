@@ -7,9 +7,8 @@ binding = "DB"
 database_name = "lunchpick-db"
 database_id = ""  # 나중에 채울 예정
 
-[triggers]
-crons = ["50 2 * * 1-5"]
-# UTC 02:50 = KST 11:50, 월~금만 실행
+# [triggers] crons 는 Pages 미지원 — Cloudflare 대시보드에서 설정
+# Workers & Pages > lunchpick > Settings > Cron Triggers > "50 2 * * 1-5"
 
 [vars]
 KAKAO_MSG_KEY = ""  # 나중에 채울 예정
