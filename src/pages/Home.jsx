@@ -113,9 +113,29 @@ export default function Home() {
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>🍽️ 런치픽</h1>
-      <p style={{ color: '#666', marginBottom: '2rem' }}>
+      <p style={{ color: '#888', marginBottom: '2rem', fontSize: '0.95rem' }}>
         팀원들과 함께 오늘 점심을 골라보세요
       </p>
+
+      {/* 이용방법 — tab === 'select' 일 때만 표시 */}
+      {tab === 'select' && (
+        <div style={styles.stepsWrap}>
+          {[
+            { icon: '👥', step: 'STEP 1', title: '팀 만들기', desc: '팀 이름을 정하고 초대 링크를 생성하세요' },
+            { icon: '🔗', step: 'STEP 2', title: '팀원 초대', desc: '링크를 공유하면 팀원이 바로 참여할 수 있어요' },
+            { icon: '🍽', step: 'STEP 3', title: '함께 투표', desc: '주변 맛집 후보에 괜찮아요/패스를 누르면 자동으로 점심이 결정돼요' },
+          ].map((s, i) => (
+            <div key={i} style={styles.stepCard}>
+              <div style={styles.stepIcon}>{s.icon}</div>
+              <div style={{ flex: 1 }}>
+                <div style={styles.stepLabel}>{s.step}</div>
+                <div style={styles.stepTitle}>{s.title}</div>
+                <div style={styles.stepDesc}>{s.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* 탭 선택 */}
       {tab === 'select' && (
@@ -198,8 +218,51 @@ const styles = {
     justifyContent: 'center',
     padding: '2rem',
     fontFamily: 'sans-serif',
+    background: '#f9fafb',
   },
   title: { fontSize: '2rem', margin: '0 0 0.5rem' },
+  stepsWrap: {
+    width: '100%',
+    maxWidth: '360px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.6rem',
+    marginBottom: '1.75rem',
+  },
+  stepCard: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '0.9rem',
+    background: '#fff',
+    border: '1px solid #f0f0f0',
+    borderRadius: '12px',
+    padding: '0.9rem 1rem',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+  },
+  stepIcon: {
+    fontSize: '1.6rem',
+    lineHeight: 1,
+    marginTop: '0.1rem',
+    flexShrink: 0,
+  },
+  stepLabel: {
+    fontSize: '0.7rem',
+    fontWeight: '700',
+    color: '#ff6b35',
+    letterSpacing: '0.08em',
+    marginBottom: '0.15rem',
+  },
+  stepTitle: {
+    fontSize: '0.95rem',
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: '0.2rem',
+  },
+  stepDesc: {
+    fontSize: '0.8rem',
+    color: '#6b7280',
+    lineHeight: 1.45,
+  },
   card: {
     background: '#fff',
     border: '1px solid #eee',
