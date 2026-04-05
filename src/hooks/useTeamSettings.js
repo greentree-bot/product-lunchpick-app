@@ -14,18 +14,19 @@ export function useTeamSettings(teamId) {
 
   useEffect(() => {
     if (!teamId || !isValidUUID(teamId)) return;
+    // select('*') 사용: 없는 컬럼 명시 시 400 오류 방지
+    // vote_deadline / min_voters 컬럼이 없으면 undefined → 기본값으로 폴백
     supabase
       .from('teams')
-      .select('vote_deadline, min_voters')
+      .select('*')
       .eq('id', teamId)
       .single()
-      .then(({ data }) => {
-        if (data) {
-          setSettings({
-            vote_deadline: data.vote_deadline ?? '11:30',
-            min_voters: data.min_voters ?? 2,
-          });
-        }
+      .then(({ data, error }) => {
+        if (error || !data) return; // 조회 실패 시 기본값 유지
+        setSettings({
+          vote_deadline: data.vote_deadline ?? '11:30',
+          min_voters: data.min_voters ?? 2,
+        });
       });
   }, [teamId]);
 

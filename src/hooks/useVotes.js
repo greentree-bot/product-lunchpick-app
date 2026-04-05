@@ -168,6 +168,7 @@ export function useVotes(teamId) {
    * @param {string} menuName - 최종 선택된 메뉴명
    */
   const recordToHistory = async (menuName) => {
+    if (!teamId || !isValidUUID(teamId)) return null;
     const { data, error } = await supabase
       .from('history')
       .insert({ team_id: teamId, menu_name: menuName, eaten_at: today })
@@ -181,6 +182,7 @@ export function useVotes(teamId) {
 
   // ─── 현재 라운드 투표 전체 삭제 (다음 라운드 시작 시) ─────────────────────
   const clearVotes = async () => {
+    if (!teamId || !isValidUUID(teamId)) return;
     const { error } = await supabase
       .from('votes')
       .delete()
