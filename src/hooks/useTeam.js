@@ -28,8 +28,8 @@ export function useTeam() {
         .insert({ team_id: team.id, name: memberName });
       if (memberErr) throw memberErr;
 
-      // 3. localStorage 저장
-      storage.save({ teamId: team.id, memberName, teamName: team.name });
+      // 3. localStorage 저장 (invite_code 포함)
+      storage.save({ teamId: team.id, memberName, teamName: team.name, inviteCode: team.invite_code });
 
       return team; // { id, name, invite_code, created_at }
     } catch (err) {
@@ -65,8 +65,8 @@ export function useTeam() {
         .insert({ team_id: team.id, name: memberName });
       if (memberErr) throw memberErr;
 
-      // 3. localStorage 저장
-      storage.save({ teamId: team.id, memberName, teamName: team.name });
+      // 3. localStorage 저장 (invite_code 포함)
+      storage.save({ teamId: team.id, memberName, teamName: team.name, inviteCode: team.invite_code });
 
       return team;
     } catch (err) {
