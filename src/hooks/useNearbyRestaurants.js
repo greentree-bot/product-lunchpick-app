@@ -11,9 +11,9 @@ import { useState, useCallback } from 'react';
  * @param {number} radius - 검색 반경(m), 기본 300
  */
 export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 300) {
-  const [restaurants, setRestaurants] = useState([]); // 필터링 후 메뉴 카드 목록
-  const [rawList, setRawList] = useState([]);          // 카카오 원본 결과
-  const [location, setLocation] = useState(null);      // { lat, lng }
+  const [restaurants, setRestaurants] = useState([]);
+  const [rawList, setRawList] = useState([]);
+  const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -25,10 +25,7 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 300) {
         return;
       }
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          resolve(coords);
-        },
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         (err) => {
           const messages = {
             1: '위치 접근 권한이 거부되었습니다.',
@@ -42,16 +39,12 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 300) {
     });
   }, []);
 
-  // ─── 2. 카카오 결과 → 메뉴 카드 형식 변환 ────────────────────────────────
-  /**
-   * 카카오맵 장소 객체를 앱에서 사용할 카드 형식으로 변환
-   * @param {object} place - 카카오맵 API 장소 객체
-   */
+  // ─── 2. 카카오 결과 → 메뉴 카드 변환 ────────────────────────────────────
   const toMenuCard = (place) => ({
     id: place.id,
     name: place.place_name,
-    category: place.category_name.split(' > ').pop(), // "음식점 > 한식 > 찌개" → "찌개"
-    distance: Number(place.distance),                 // 단위: m
+    category: place.category_name?.split(' > ').pop() ?? '',
+    distance: Number(place.distance),
     address: place.road_address_name || place.address_name,
     phone: place.phone || null,
     url: place.place_url,
@@ -59,74 +52,81 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 300) {
     lng: Number(place.x),
   });
 
-  // ─── 3. 검색 실행 ─────────────────────────────────────────────────────────
+  // ─── 3. /api/kakaomap 호출 ────────────────────────────────────────────────
   const searchNearby = useCallback(async (coords) => {
     setLoading(true);
     setError(null);
 
     try {
-      // Cloudflare Pages Function 프록시를 통해 카카오맵 API 호출
-      // (브라우저에서 직접 호출 시 KAKAO_MAP_KEY가 노출되므로 서버 경유)
       const params = new URLSearchParams({
         lat: coords.lat,
         lng: coords.lng,
         radius,
       });
-      const res = await fetch(`/api/kakaomap?${params}`);
+      const url = `/api/kakaomap?${params}`;
+      console.log('[useNearbyRestaurants] fetch →', url);
+
+      const res = await fetch(url);
+      const data = await res.json();
+
+      console.log('[useNearbyRestaurants] 응답 status:', res.status, 'data:', data);
 
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `서버 오류 (${res.status})`);
+        const msg = data?.error || data?.msg || `서버 오류 (${res.status})`;
+        console.error('[useNearbyRestaurants] 오류 응답:', data);
+        throw new Error(msg);
       }
 
-      const data = await res.json();
       const places = data.documents ?? [];
+      console.log('[useNearbyRestaurants] 장소 수:', places.length);
 
       setRawList(places);
 
-      // ─── 4. 이번 주 히스토리 메뉴 필터링 ───────────────────────────────
       const filtered = places
         .map(toMenuCard)
         .filter((card) => !weekMenuSet.has(card.name));
 
+      console.log('[useNearbyRestaurants] 필터 후 장소 수:', filtered.length);
       setRestaurants(filtered);
+
     } catch (err) {
+      console.error('[useNearbyRestaurants] catch:', err.message);
       setError(err.message);
     } finally {
       setLoading(false);
     }
   }, [radius, weekMenuSet]);
 
-  // ─── 5. 위치 가져오기 + 검색 통합 실행 ───────────────────────────────────
+  // ─── 4. 위치 + 검색 통합 실행 ────────────────────────────────────────────
   const fetchNearby = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const coords = await getCurrentLocation();
+      console.log('[useNearbyRestaurants] 위치:', coords);
       setLocation(coords);
       await searchNearby(coords);
     } catch (err) {
+      console.error('[useNearbyRestaurants] 위치 오류:', err.message);
       setError(err.message);
       setLoading(false);
     }
   }, [getCurrentLocation, searchNearby]);
 
-  // ─── 6. 좌표가 이미 있을 때 재검색 (weekMenuSet 변경 시 필터 재적용) ───────
+  // ─── 5. weekMenuSet 변경 시 필터 재적용 (API 재호출 없음) ─────────────────
   const refilter = useCallback(() => {
     if (!rawList.length) return;
-    const filtered = rawList
-      .map(toMenuCard)
-      .filter((card) => !weekMenuSet.has(card.name));
+    const filtered = rawList.map(toMenuCard).filter((card) => !weekMenuSet.has(card.name));
     setRestaurants(filtered);
   }, [rawList, weekMenuSet]);
 
   return {
-    restaurants,   // 필터링된 메뉴 카드 배열
-    location,      // { lat, lng } 현재 위치
+    restaurants,
+    location,
     loading,
     error,
-    fetchNearby,   // 위치 획득 + 검색 통합 실행
-    searchNearby,  // 이미 좌표가 있을 때 재검색
-    refilter,      // weekMenuSet만 바뀌었을 때 필터 재적용 (API 재호출 없음)
+    fetchNearby,
+    searchNearby,
+    refilter,
   };
 }
