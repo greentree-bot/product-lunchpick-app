@@ -20,7 +20,7 @@ function App() {
     if (!trimmed) return;
     setVoterName(trimmed);
     // 개발용 임시 팀 ID: Supabase teams 테이블에 먼저 row를 만들고 그 uuid를 여기에 넣으세요
-    setTeamId(null); // TODO: 실제 teamId(uuid)로 교체
+    setTeamId('76fc743b-4629-4a92-9662-51469c1da5f9');
   };
 
   const getOkCount = (menuName) =>
