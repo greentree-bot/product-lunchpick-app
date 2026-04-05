@@ -5,7 +5,7 @@ import { storage } from '../lib/storage';
 
 export default function Result() {
   const navigate = useNavigate();
-  const { teamId, memberName, teamName } = storage.load();
+  const { teamId, teamName } = storage.load();
 
   const { votes, todayHistory, okCountByMenu, clearVotes, recordToHistory, loading } = useVotes(teamId);
 
