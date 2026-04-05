@@ -23,7 +23,9 @@ export default function Vote() {
     fetchNearby,
   } = useNearbyRestaurants(weekMenuSet);
 
-  // UI 전용 로컬 투표 상태 (DB 저장 실패 시 fallback)
+  // 로컬 카운트 상태: { [restaurantName]: { okCount, passCount } }
+  const [localCounts, setLocalCounts] = useState({});
+  // 내 투표 로컬 상태
   const [localVote, setLocalVote] = useState(null);
 
   useEffect(() => {
@@ -32,43 +34,60 @@ export default function Vote() {
 
   if (!teamId || !memberName) return null;
 
-  // 오늘 날짜 (UTC 기준)
   const today = new Date().toISOString().slice(0, 10);
-
-  // DB 투표 중 오늘 것만 확인
   const dbVote = votes.find(
     (v) => v.voter_name === memberName && v.voted_at?.slice(0, 10) === today
   );
-
-  // DB 투표 없으면 로컬 투표 사용
   const myVote = dbVote || localVote;
 
-  console.log('[Vote] 상태:', { teamId, memberName, votesCount: votes.length, myVote, today });
+  // 카운트 계산: DB 카운트 + 로컬 카운트 합산
+  const getCount = (menuName, action) => {
+    const dbCount = action === 'ok' ? (okCountByMenu[menuName] ?? 0) : 0;
+    const local = localCounts[menuName];
+    if (!local) return dbCount;
+    return action === 'ok'
+      ? dbCount + (local.okCount || 0)
+      : (local.passCount || 0);
+  };
 
-  const handleVote = async (menuName, action) => {
-    console.log('[Vote] 버튼 클릭:', { teamId, memberName, menuName, action, currentMyVote: myVote });
+  const handleVote = async (restaurant, action) => {
+    if (myVote) return;
 
-    if (myVote) {
-      console.log('[Vote] 이미 투표함 → 무시');
-      return;
-    }
+    const menuName = restaurant.name;
 
-    // UI 즉시 반영 (낙관적 업데이트)
-    const optimistic = {
+    // 1. 로컬 state 즉시 반영
+    setLocalVote({
       id: `local-${Date.now()}`,
       menu_name: menuName,
       action,
       voter_name: memberName,
       voted_at: new Date().toISOString(),
-    };
-    setLocalVote(optimistic);
+    });
 
-    try {
-      await castVote(menuName, action, memberName);
-      console.log('[Vote] DB 저장 성공');
-    } catch (err) {
-      console.error('[Vote] DB 저장 실패 (로컬 상태 유지):', err.message);
-      // 로컬 상태는 유지 → UI는 정상 동작
+    setLocalCounts((prev) => {
+      const cur = prev[menuName] || { okCount: 0, passCount: 0 };
+      const updated = {
+        ...cur,
+        okCount: action === 'ok' ? cur.okCount + 1 : cur.okCount,
+        passCount: action === 'pass' ? cur.passCount + 1 : cur.passCount,
+      };
+      console.log('투표:', {
+        restaurant: menuName,
+        action,
+        okCount: updated.okCount,
+        passCount: updated.passCount,
+      });
+      return { ...prev, [menuName]: updated };
+    });
+
+    // 2. teamId 있으면 Supabase에도 저장
+    if (teamId) {
+      try {
+        await castVote(menuName, action, memberName);
+        console.log('[Vote] DB 저장 성공:', menuName, action);
+      } catch (err) {
+        console.error('[Vote] DB 저장 실패 (로컬 유지):', err.message);
+      }
     }
   };
 
@@ -102,48 +121,64 @@ export default function Vote() {
         {locationError && (
           <p style={{ color: 'red', margin: '0.5rem 0' }}>오류: {locationError}</p>
         )}
-
         {loadingVotes && <p style={{ color: '#999' }}>투표 현황 불러오는 중...</p>}
 
         {restaurants.length > 0 && (
           <section style={{ marginTop: '1.5rem' }}>
             <h2 style={styles.sectionTitle}>주변 식당 {restaurants.length}곳</h2>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {restaurants.map((r) => (
-                <li key={r.id} style={styles.card}>
-                  <div>
-                    <strong style={{ fontSize: '1rem' }}>{r.name}</strong>
-                    <p style={styles.cardSub}>{r.category} · {r.distance}m</p>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={styles.okCount}>
-                      👍 {okCountByMenu[r.name] ?? 0}
-                    </span>
-                    {myVote?.menu_name === r.name ? (
-                      <span style={{ color: myVote.action === 'ok' ? '#22c55e' : '#9ca3af', fontWeight: 'bold' }}>
-                        {myVote.action === 'ok' ? '✓ 괜찮아요' : '✗ 패스'}
+              {restaurants.map((r) => {
+                const okCount = getCount(r.name, 'ok');
+                const passCount = getCount(r.name, 'pass');
+                const isMyChoice = myVote?.menu_name === r.name;
+
+                return (
+                  <li key={r.id} style={{
+                    ...styles.card,
+                    border: isMyChoice ? '2px solid #ff6b35' : '1px solid #eee',
+                  }}>
+                    <div>
+                      <strong style={{ fontSize: '1rem' }}>{r.name}</strong>
+                      <p style={styles.cardSub}>{r.category} · {r.distance}m</p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {/* 카운트 표시 */}
+                      <span style={styles.countBadge}>
+                        👍 {okCount}
                       </span>
-                    ) : (
-                      <>
-                        <button
-                          style={{ ...styles.btnOk, opacity: myVote ? 0.4 : 1 }}
-                          onClick={() => handleVote(r.name, 'ok')}
-                          disabled={!!myVote}
-                        >
-                          괜찮아요
-                        </button>
-                        <button
-                          style={{ ...styles.btnPass, opacity: myVote ? 0.4 : 1 }}
-                          onClick={() => handleVote(r.name, 'pass')}
-                          disabled={!!myVote}
-                        >
-                          패스
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </li>
-              ))}
+                      {passCount > 0 && (
+                        <span style={{ ...styles.countBadge, color: '#9ca3af' }}>
+                          👎 {passCount}
+                        </span>
+                      )}
+
+                      {/* 내가 이미 이 식당에 투표한 경우 */}
+                      {isMyChoice ? (
+                        <span style={{ color: myVote.action === 'ok' ? '#22c55e' : '#9ca3af', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                          {myVote.action === 'ok' ? '✓ 괜찮아요' : '✗ 패스'}
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            style={{ ...styles.btnOk, opacity: myVote ? 0.35 : 1, cursor: myVote ? 'not-allowed' : 'pointer' }}
+                            onClick={() => handleVote(r, 'ok')}
+                            disabled={!!myVote}
+                          >
+                            괜찮아요
+                          </button>
+                          <button
+                            style={{ ...styles.btnPass, opacity: myVote ? 0.35 : 1, cursor: myVote ? 'not-allowed' : 'pointer' }}
+                            onClick={() => handleVote(r, 'pass')}
+                            disabled={!!myVote}
+                          >
+                            패스
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}
@@ -169,7 +204,6 @@ const styles = {
   main: { padding: '1.5rem', maxWidth: '720px', margin: '0 auto' },
   sectionTitle: { fontSize: '1rem', color: '#444', margin: '0 0 0.75rem' },
   card: {
-    border: '1px solid #eee',
     borderRadius: '10px',
     padding: '0.9rem 1rem',
     marginBottom: '0.75rem',
@@ -180,7 +214,7 @@ const styles = {
     boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
   },
   cardSub: { margin: '0.2rem 0 0', fontSize: '0.85rem', color: '#888' },
-  okCount: { fontSize: '0.9rem', color: '#555', minWidth: '40px' },
+  countBadge: { fontSize: '0.9rem', color: '#555', minWidth: '36px' },
   btnPrimary: {
     padding: '0.75rem 1.5rem',
     fontSize: '1rem',
