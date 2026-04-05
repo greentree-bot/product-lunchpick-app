@@ -11,25 +11,17 @@ export default function Vote() {
   const { teamId, memberName, teamName, inviteCode } = storage.load();
   const inviteLink = inviteCode ? `${APP_URL}/join/${inviteCode}` : null;
 
-  const {
-    votes,
-    weekMenuSet,
-    loading: loadingVotes,
-    castVote,
-    okCountByMenu,
-  } = useVotes(teamId);
+  const { votes, weekMenuSet, loading: loadingVotes, castVote, okCountByMenu } = useVotes(teamId);
+  const { restaurants, loading: loadingRestaurants, error: locationError, fetchNearby } = useNearbyRestaurants(weekMenuSet);
 
-  const {
-    restaurants,
-    loading: loadingRestaurants,
-    error: locationError,
-    fetchNearby,
-  } = useNearbyRestaurants(weekMenuSet);
+  // ─── 내 투표 로컬 상태 ────────────────────────────────────────────────────
+  // 괜찮아요: 단 1개 (menu_name 문자열)
+  const [localOkMenu, setLocalOkMenu] = useState(null);
+  // 패스: 여러 개 (menu_name Set)
+  const [localPassSet, setLocalPassSet] = useState(new Set());
+  // ok 카운트 로컬 증분: { [menuName]: number }
+  const [localOkCounts, setLocalOkCounts] = useState({});
 
-  // 로컬 카운트 상태: { [restaurantName]: { okCount, passCount } }
-  const [localCounts, setLocalCounts] = useState({});
-  // 내 투표 로컬 상태
-  const [localVote, setLocalVote] = useState(null);
   // 초대 모달
   const [showInvite, setShowInvite] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -40,67 +32,60 @@ export default function Vote() {
 
   if (!teamId || !memberName) return null;
 
+  // ─── DB 투표에서 오늘 내 투표 추출 ───────────────────────────────────────
   const today = new Date().toISOString().slice(0, 10);
-  const dbVote = votes.find(
+  const myTodayVotes = votes.filter(
     (v) => v.voter_name === memberName && v.voted_at?.slice(0, 10) === today
   );
-  const myVote = dbVote || localVote;
+  const dbOkMenu = myTodayVotes.find((v) => v.action === 'ok')?.menu_name ?? null;
+  const dbPassSet = new Set(myTodayVotes.filter((v) => v.action === 'pass').map((v) => v.menu_name));
 
-  // 카운트 계산: DB 카운트 + 로컬 카운트 합산
-  const getCount = (menuName, action) => {
-    const dbCount = action === 'ok' ? (okCountByMenu[menuName] ?? 0) : 0;
-    const local = localCounts[menuName];
-    if (!local) return dbCount;
-    return action === 'ok'
-      ? dbCount + (local.okCount || 0)
-      : (local.passCount || 0);
-  };
+  // DB + 로컬 합산
+  const myOkMenu = dbOkMenu ?? localOkMenu;
+  const myPassSet = new Set([...dbPassSet, ...localPassSet]);
 
-  const handleVote = async (restaurant, action) => {
-    if (myVote) return;
+  // ─── 카운트 계산 ─────────────────────────────────────────────────────────
+  const getOkCount = (menuName) => (okCountByMenu[menuName] ?? 0) + (localOkCounts[menuName] ?? 0);
 
+  // ─── 투표 핸들러 ─────────────────────────────────────────────────────────
+  const handleOk = async (restaurant) => {
     const menuName = restaurant.name;
+    if (myOkMenu) return; // 이미 괜찮아요 선택됨
 
-    // 1. 로컬 state 즉시 반영
-    setLocalVote({
-      id: `local-${Date.now()}`,
-      menu_name: menuName,
-      action,
-      voter_name: memberName,
-      voted_at: new Date().toISOString(),
-    });
+    // 로컬 즉시 반영
+    setLocalOkMenu(menuName);
+    setLocalOkCounts((prev) => ({ ...prev, [menuName]: (prev[menuName] ?? 0) + 1 }));
 
-    setLocalCounts((prev) => {
-      const cur = prev[menuName] || { okCount: 0, passCount: 0 };
-      const updated = {
-        ...cur,
-        okCount: action === 'ok' ? cur.okCount + 1 : cur.okCount,
-        passCount: action === 'pass' ? cur.passCount + 1 : cur.passCount,
-      };
-      console.log('투표:', {
-        restaurant: menuName,
-        action,
-        okCount: updated.okCount,
-        passCount: updated.passCount,
-      });
-      return { ...prev, [menuName]: updated };
-    });
+    console.log('괜찮아요:', { menuName, okCount: getOkCount(menuName) + 1 });
 
-    // 2. teamId 있으면 Supabase에도 저장
     if (teamId) {
       try {
-        await castVote(menuName, action, memberName);
-        console.log('[Vote] DB 저장 성공:', menuName, action);
+        await castVote(menuName, 'ok', memberName);
       } catch (err) {
-        console.error('[Vote] DB 저장 실패 (로컬 유지):', err.message);
+        console.error('[Vote] ok DB 저장 실패:', err.message);
       }
     }
   };
 
-  const handleLogout = () => {
-    storage.clear();
-    navigate('/');
+  const handlePass = async (restaurant) => {
+    const menuName = restaurant.name;
+    if (myPassSet.has(menuName)) return; // 이미 이 식당 패스함
+
+    // 로컬 즉시 반영
+    setLocalPassSet((prev) => new Set([...prev, menuName]));
+
+    console.log('패스:', { menuName, totalPassed: myPassSet.size + 1 });
+
+    if (teamId) {
+      try {
+        await castVote(menuName, 'pass', memberName);
+      } catch (err) {
+        console.error('[Vote] pass DB 저장 실패:', err.message);
+      }
+    }
   };
+
+  const handleLogout = () => { storage.clear(); navigate('/'); };
 
   const copyLink = async () => {
     if (!inviteLink) return;
@@ -134,7 +119,8 @@ export default function Vote() {
   };
 
   return (
-    <div style={{ fontFamily: 'sans-serif', minHeight: '100vh' }}>
+    <div style={{ fontFamily: 'sans-serif', minHeight: '100vh', background: '#f9fafb' }}>
+      {/* 헤더 */}
       <header style={styles.header}>
         <div>
           <h1 style={styles.headerTitle}>🍽️ 런치픽</h1>
@@ -142,16 +128,10 @@ export default function Vote() {
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           {inviteLink && (
-            <button style={styles.btnInvite} onClick={() => setShowInvite(true)}>
-              팀원 초대
-            </button>
+            <button style={styles.btnInvite} onClick={() => setShowInvite(true)}>팀원 초대</button>
           )}
-          <button style={styles.btnGhost} onClick={() => navigate('/result')}>
-            결과 보기
-          </button>
-          <button style={styles.btnGhost} onClick={handleLogout}>
-            나가기
-          </button>
+          <button style={styles.btnGhost} onClick={() => navigate('/result')}>결과 보기</button>
+          <button style={styles.btnGhost} onClick={handleLogout}>나가기</button>
         </div>
       </header>
 
@@ -168,25 +148,29 @@ export default function Vote() {
               <button style={styles.btnSecondary} onClick={copyLink}>
                 {copied ? '✓ 복사됨' : '링크 복사'}
               </button>
-              <button style={styles.btnKakao} onClick={shareKakao}>
-                카카오톡 공유
-              </button>
+              <button style={styles.btnKakao} onClick={shareKakao}>카카오톡 공유</button>
             </div>
-            <button style={styles.btnClose} onClick={() => setShowInvite(false)}>
-              닫기
-            </button>
+            <button style={styles.btnClose} onClick={() => setShowInvite(false)}>닫기</button>
           </div>
         </div>
       )}
 
       <main style={styles.main}>
+        {/* 내 투표 현황 요약 */}
+        {(myOkMenu || myPassSet.size > 0) && (
+          <div style={styles.summaryBox}>
+            {myOkMenu && <span style={styles.summaryOk}>✓ 괜찮아요: {myOkMenu}</span>}
+            {myPassSet.size > 0 && (
+              <span style={styles.summaryPass}>✗ 패스 {myPassSet.size}개</span>
+            )}
+          </div>
+        )}
+
         <button style={styles.btnPrimary} onClick={fetchNearby} disabled={loadingRestaurants}>
           {loadingRestaurants ? '검색 중...' : '📍 내 주변 식당 찾기'}
         </button>
 
-        {locationError && (
-          <p style={{ color: 'red', margin: '0.5rem 0' }}>오류: {locationError}</p>
-        )}
+        {locationError && <p style={{ color: 'red', margin: '0.5rem 0' }}>오류: {locationError}</p>}
         {loadingVotes && <p style={{ color: '#999' }}>투표 현황 불러오는 중...</p>}
 
         {restaurants.length > 0 && (
@@ -194,52 +178,54 @@ export default function Vote() {
             <h2 style={styles.sectionTitle}>주변 식당 {restaurants.length}곳</h2>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               {restaurants.map((r) => {
-                const okCount = getCount(r.name, 'ok');
-                const passCount = getCount(r.name, 'pass');
-                const isMyChoice = myVote?.menu_name === r.name;
+                const isOked   = myOkMenu === r.name;
+                const isPassed = myPassSet.has(r.name);
+                const okCount  = getOkCount(r.name);
 
                 return (
                   <li key={r.id} style={{
                     ...styles.card,
-                    border: isMyChoice ? '2px solid #ff6b35' : '1px solid #eee',
+                    border: isOked ? '2px solid #22c55e'
+                          : isPassed ? '1px solid #e5e7eb'
+                          : '1px solid #eee',
+                    opacity: isPassed && !isOked ? 0.6 : 1,
                   }}>
-                    <div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <strong style={{ fontSize: '1rem' }}>{r.name}</strong>
                       <p style={styles.cardSub}>{r.category} · {r.distance}m</p>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      {/* 카운트 표시 */}
-                      <span style={styles.countBadge}>
-                        👍 {okCount}
-                      </span>
-                      {passCount > 0 && (
-                        <span style={{ ...styles.countBadge, color: '#9ca3af' }}>
-                          👎 {passCount}
-                        </span>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
+                      {/* ok 카운트 */}
+                      {okCount > 0 && (
+                        <span style={styles.countBadge}>👍 {okCount}</span>
                       )}
 
-                      {/* 내가 이미 이 식당에 투표한 경우 */}
-                      {isMyChoice ? (
-                        <span style={{ color: myVote.action === 'ok' ? '#22c55e' : '#9ca3af', fontWeight: 'bold', fontSize: '0.85rem' }}>
-                          {myVote.action === 'ok' ? '✓ 괜찮아요' : '✗ 패스'}
-                        </span>
+                      {/* 괜찮아요: 이미 이 식당을 ok했으면 뱃지, 아니면 버튼 */}
+                      {isOked ? (
+                        <span style={styles.badgeOk}>✓ 괜찮아요</span>
                       ) : (
-                        <>
+                        <button
+                          style={{ ...styles.btnOk, opacity: myOkMenu ? 0.3 : 1, cursor: myOkMenu ? 'not-allowed' : 'pointer' }}
+                          onClick={() => handleOk(r)}
+                          disabled={!!myOkMenu}
+                        >
+                          괜찮아요
+                        </button>
+                      )}
+
+                      {/* 패스: 이미 이 식당을 패스했으면 뱃지, 아니면 버튼 (ok한 식당엔 숨김) */}
+                      {!isOked && (
+                        isPassed ? (
+                          <span style={styles.badgePass}>✗ 패스</span>
+                        ) : (
                           <button
-                            style={{ ...styles.btnOk, opacity: myVote ? 0.35 : 1, cursor: myVote ? 'not-allowed' : 'pointer' }}
-                            onClick={() => handleVote(r, 'ok')}
-                            disabled={!!myVote}
-                          >
-                            괜찮아요
-                          </button>
-                          <button
-                            style={{ ...styles.btnPass, opacity: myVote ? 0.35 : 1, cursor: myVote ? 'not-allowed' : 'pointer' }}
-                            onClick={() => handleVote(r, 'pass')}
-                            disabled={!!myVote}
+                            style={styles.btnPass}
+                            onClick={() => handlePass(r)}
                           >
                             패스
                           </button>
-                        </>
+                        )
                       )}
                     </div>
                   </li>
@@ -255,136 +241,82 @@ export default function Vote() {
 
 const styles = {
   header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '1rem 1.5rem',
-    borderBottom: '1px solid #eee',
-    background: '#fff',
-    position: 'sticky',
-    top: 0,
-    zIndex: 10,
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '1rem 1.5rem', borderBottom: '1px solid #eee',
+    background: '#fff', position: 'sticky', top: 0, zIndex: 10,
   },
   headerTitle: { margin: 0, fontSize: '1.3rem' },
   headerSub: { margin: 0, fontSize: '0.85rem', color: '#666' },
   main: { padding: '1.5rem', maxWidth: '720px', margin: '0 auto' },
   sectionTitle: { fontSize: '1rem', color: '#444', margin: '0 0 0.75rem' },
+  summaryBox: {
+    display: 'flex', gap: '0.75rem', flexWrap: 'wrap',
+    marginBottom: '1rem', padding: '0.6rem 0.9rem',
+    background: '#fff', borderRadius: '8px', border: '1px solid #eee',
+    fontSize: '0.85rem',
+  },
+  summaryOk: { color: '#22c55e', fontWeight: 'bold' },
+  summaryPass: { color: '#9ca3af' },
   card: {
-    borderRadius: '10px',
-    padding: '0.9rem 1rem',
-    marginBottom: '0.75rem',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    background: '#fff',
-    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+    borderRadius: '10px', padding: '0.9rem 1rem', marginBottom: '0.75rem',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
   },
   cardSub: { margin: '0.2rem 0 0', fontSize: '0.85rem', color: '#888' },
-  countBadge: { fontSize: '0.9rem', color: '#555', minWidth: '36px' },
+  countBadge: { fontSize: '0.85rem', color: '#555', minWidth: '36px' },
+  badgeOk: {
+    fontSize: '0.8rem', color: '#22c55e', fontWeight: 'bold',
+    background: '#f0fdf4', padding: '0.25rem 0.5rem', borderRadius: '6px',
+  },
+  badgePass: {
+    fontSize: '0.8rem', color: '#9ca3af',
+    background: '#f3f4f6', padding: '0.25rem 0.5rem', borderRadius: '6px',
+  },
   btnPrimary: {
-    padding: '0.75rem 1.5rem',
-    fontSize: '1rem',
-    background: '#ff6b35',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-    width: '100%',
+    padding: '0.75rem 1.5rem', fontSize: '1rem', background: '#ff6b35',
+    color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer',
+    fontWeight: 'bold', width: '100%',
   },
   btnOk: {
-    padding: '0.4rem 0.75rem',
-    fontSize: '0.85rem',
-    background: '#22c55e',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
+    padding: '0.4rem 0.65rem', fontSize: '0.82rem', background: '#22c55e',
+    color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer',
   },
   btnPass: {
-    padding: '0.4rem 0.75rem',
-    fontSize: '0.85rem',
-    background: '#e5e7eb',
-    color: '#374151',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
+    padding: '0.4rem 0.65rem', fontSize: '0.82rem', background: '#e5e7eb',
+    color: '#374151', border: 'none', borderRadius: '6px', cursor: 'pointer',
   },
   btnGhost: {
-    padding: '0.4rem 0.75rem',
-    fontSize: '0.85rem',
-    background: 'transparent',
-    color: '#666',
-    border: '1px solid #ddd',
-    borderRadius: '6px',
-    cursor: 'pointer',
+    padding: '0.4rem 0.75rem', fontSize: '0.85rem', background: 'transparent',
+    color: '#666', border: '1px solid #ddd', borderRadius: '6px', cursor: 'pointer',
   },
   btnInvite: {
-    padding: '0.4rem 0.75rem',
-    fontSize: '0.85rem',
-    background: '#FEE500',
-    color: '#191919',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontWeight: 'bold',
+    padding: '0.4rem 0.75rem', fontSize: '0.85rem', background: '#FEE500',
+    color: '#191919', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold',
   },
   btnSecondary: {
-    padding: '0.6rem 0.75rem',
-    fontSize: '0.9rem',
-    background: '#fff',
-    color: '#ff6b35',
-    border: '2px solid #ff6b35',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-    flex: 1,
+    padding: '0.6rem 0.75rem', fontSize: '0.9rem', background: '#fff',
+    color: '#ff6b35', border: '2px solid #ff6b35', borderRadius: '8px',
+    cursor: 'pointer', fontWeight: 'bold', flex: 1,
   },
   btnKakao: {
-    padding: '0.6rem 0.75rem',
-    fontSize: '0.9rem',
-    background: '#FEE500',
-    color: '#191919',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-    flex: 1,
+    padding: '0.6rem 0.75rem', fontSize: '0.9rem', background: '#FEE500',
+    color: '#191919', border: 'none', borderRadius: '8px',
+    cursor: 'pointer', fontWeight: 'bold', flex: 1,
   },
   btnClose: {
-    marginTop: '0.75rem',
-    width: '100%',
-    padding: '0.6rem',
-    fontSize: '0.9rem',
-    background: 'transparent',
-    color: '#999',
-    border: 'none',
-    cursor: 'pointer',
+    marginTop: '0.75rem', width: '100%', padding: '0.6rem',
+    fontSize: '0.9rem', background: 'transparent', color: '#999', border: 'none', cursor: 'pointer',
   },
   modalOverlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.4)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 100,
-    padding: '1rem',
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem',
   },
   modal: {
-    background: '#fff',
-    borderRadius: '14px',
-    padding: '1.5rem',
-    width: '100%',
-    maxWidth: '360px',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+    background: '#fff', borderRadius: '14px', padding: '1.5rem',
+    width: '100%', maxWidth: '360px', boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
   },
   linkBox: {
-    background: '#f5f5f5',
-    borderRadius: '8px',
-    padding: '0.75rem',
-    fontSize: '0.8rem',
-    wordBreak: 'break-all',
-    color: '#333',
+    background: '#f5f5f5', borderRadius: '8px', padding: '0.75rem',
+    fontSize: '0.8rem', wordBreak: 'break-all', color: '#333',
   },
 };
