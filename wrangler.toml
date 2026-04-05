@@ -1,0 +1,11 @@
+name = "lunchpick"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "build"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lunchpick-db"
+database_id = ""  # 나중에 채울 예정
+
+[vars]
+KAKAO_MSG_KEY = ""  # 나중에 채울 예정
