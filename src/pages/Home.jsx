@@ -30,6 +30,15 @@ export default function Home() {
     if (teamId && memberName) navigate('/vote');
   }, [navigate]);
 
+  // 카카오 SDK 초기화 (JavaScript 키)
+  useEffect(() => {
+    const jsKey = process.env.REACT_APP_KAKAO_JS_KEY;
+    if (!jsKey) return;
+    if (window.Kakao && !window.Kakao.isInitialized()) {
+      window.Kakao.init(jsKey);
+    }
+  }, []);
+
   // ─── 팀 만들기 ────────────────────────────────────────────────────────────
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -66,11 +75,36 @@ export default function Home() {
     }
   };
 
-  // ─── 카카오톡 공유 (Web Share API → clipboard fallback) ───────────────────
-  const shareKakao = async () => {
-    if (navigator.share) {
-      await navigator.share({ title: '런치픽 팀 초대', url: inviteLink });
+  // ─── 카카오톡 공유 ────────────────────────────────────────────────────────
+  const shareKakao = () => {
+    // 카카오 SDK로 친구 선택 후 직접 메시지 전송
+    if (window.Kakao?.Share) {
+      window.Kakao.Share.sendDefault({
+        objectType: 'feed',
+        content: {
+          title: `[런치픽] ${teamName || '우리팀'} 점심 투표에 초대합니다 🍽️`,
+          description: '지금 참여해서 오늘 점심 메뉴를 함께 골라요!',
+          imageUrl: `${APP_URL}/logo192.png`,
+          link: {
+            mobileWebUrl: inviteLink,
+            webUrl: inviteLink,
+          },
+        },
+        buttons: [
+          {
+            title: '팀 참여하기',
+            link: {
+              mobileWebUrl: inviteLink,
+              webUrl: inviteLink,
+            },
+          },
+        ],
+      });
+    } else if (navigator.share) {
+      // SDK 없으면 Web Share API (모바일 공유 시트)
+      navigator.share({ title: '런치픽 팀 초대', url: inviteLink });
     } else {
+      // 최후 fallback: 클립보드 복사
       copyLink();
     }
   };
