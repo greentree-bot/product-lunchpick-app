@@ -5,6 +5,9 @@ import { supabase } from '../lib/supabase';
  * 팀 투표 현황 실시간 구독 + 투표 저장 + 히스토리 조회
  * @param {string} teamId - teams.id (uuid)
  */
+const isValidUUID = (id) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
 export function useVotes(teamId) {
   const [votes, setVotes] = useState([]);           // 현재 라운드 투표 목록
   const [todayHistory, setTodayHistory] = useState([]); // 오늘 먹은 메뉴
@@ -26,7 +29,7 @@ export function useVotes(teamId) {
 
   // ─── 오늘 히스토리 불러오기 ───────────────────────────────────────────────
   const fetchTodayHistory = useCallback(async () => {
-    if (!teamId) return;
+    if (!teamId || !isValidUUID(teamId)) return;
     const { data, error } = await supabase
       .from('history')
       .select('*')
@@ -40,7 +43,7 @@ export function useVotes(teamId) {
 
   // ─── 이번 주 히스토리 불러오기 (반복 방지용) ─────────────────────────────
   const fetchWeekHistory = useCallback(async () => {
-    if (!teamId) return;
+    if (!teamId || !isValidUUID(teamId)) return;
     const monday = getMonday();
     const { data, error } = await supabase
       .from('history')
@@ -55,7 +58,7 @@ export function useVotes(teamId) {
 
   // ─── 현재 투표 목록 불러오기 ─────────────────────────────────────────────
   const fetchVotes = useCallback(async () => {
-    if (!teamId) return;
+    if (!teamId || !isValidUUID(teamId)) return;
     setLoading(true);
     const { data, error } = await supabase
       .from('votes')
@@ -70,7 +73,7 @@ export function useVotes(teamId) {
 
   // ─── 초기 데이터 로드 + Realtime 구독 ────────────────────────────────────
   useEffect(() => {
-    if (!teamId) return;
+    if (!teamId || !isValidUUID(teamId)) return;
 
     fetchVotes();
     fetchTodayHistory();
