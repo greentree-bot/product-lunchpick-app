@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useVotes } from '../hooks/useVotes';
 import { useNearbyRestaurants } from '../hooks/useNearbyRestaurants';
+import { useTeamSettings } from '../hooks/useTeamSettings';
 import { storage } from '../lib/storage';
 
 const APP_URL = 'https://lunchpick.pages.dev';
@@ -13,22 +14,31 @@ export default function Vote() {
 
   const { votes, weekMenuSet, loading: loadingVotes, castVote, okCountByMenu } = useVotes(teamId);
   const { restaurants, loading: loadingRestaurants, error: locationError, fetchNearby } = useNearbyRestaurants(weekMenuSet);
+  const { settings, updateSettings, saving, isVotingClosed } = useTeamSettings(teamId);
 
   // ─── 내 투표 로컬 상태 ────────────────────────────────────────────────────
-  // 괜찮아요: 단 1개 (menu_name 문자열)
   const [localOkMenu, setLocalOkMenu] = useState(null);
-  // 패스: 여러 개 (menu_name Set)
   const [localPassSet, setLocalPassSet] = useState(new Set());
-  // ok 카운트 로컬 증분: { [menuName]: number }
   const [localOkCounts, setLocalOkCounts] = useState({});
 
-  // 초대 모달
+  // ─── 모달 상태 ────────────────────────────────────────────────────────────
   const [showInvite, setShowInvite] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [editDeadline, setEditDeadline] = useState('');
+  const [editMinVoters, setEditMinVoters] = useState(2);
 
   useEffect(() => {
     if (!teamId || !memberName) navigate('/');
   }, [teamId, memberName, navigate]);
+
+  // 설정 모달 열 때 현재값 복사
+  useEffect(() => {
+    if (showSettings) {
+      setEditDeadline(settings.vote_deadline);
+      setEditMinVoters(settings.min_voters);
+    }
+  }, [showSettings, settings]);
 
   if (!teamId || !memberName) return null;
 
@@ -40,7 +50,6 @@ export default function Vote() {
   const dbOkMenu = myTodayVotes.find((v) => v.action === 'ok')?.menu_name ?? null;
   const dbPassSet = new Set(myTodayVotes.filter((v) => v.action === 'pass').map((v) => v.menu_name));
 
-  // DB + 로컬 합산
   const myOkMenu = dbOkMenu ?? localOkMenu;
   const myPassSet = new Set([...dbPassSet, ...localPassSet]);
 
@@ -49,39 +58,32 @@ export default function Vote() {
 
   // ─── 투표 핸들러 ─────────────────────────────────────────────────────────
   const handleOk = async (restaurant) => {
+    if (isVotingClosed || myOkMenu) return;
     const menuName = restaurant.name;
-    if (myOkMenu) return; // 이미 괜찮아요 선택됨
-
-    // 로컬 즉시 반영
     setLocalOkMenu(menuName);
     setLocalOkCounts((prev) => ({ ...prev, [menuName]: (prev[menuName] ?? 0) + 1 }));
-
-    console.log('괜찮아요:', { menuName, okCount: getOkCount(menuName) + 1 });
-
     if (teamId) {
-      try {
-        await castVote(menuName, 'ok', memberName);
-      } catch (err) {
-        console.error('[Vote] ok DB 저장 실패:', err.message);
-      }
+      try { await castVote(menuName, 'ok', memberName); }
+      catch (err) { console.error('[Vote] ok DB 저장 실패:', err.message); }
     }
   };
 
   const handlePass = async (restaurant) => {
+    if (isVotingClosed || myPassSet.has(restaurant.name)) return;
     const menuName = restaurant.name;
-    if (myPassSet.has(menuName)) return; // 이미 이 식당 패스함
-
-    // 로컬 즉시 반영
     setLocalPassSet((prev) => new Set([...prev, menuName]));
-
-    console.log('패스:', { menuName, totalPassed: myPassSet.size + 1 });
-
     if (teamId) {
-      try {
-        await castVote(menuName, 'pass', memberName);
-      } catch (err) {
-        console.error('[Vote] pass DB 저장 실패:', err.message);
-      }
+      try { await castVote(menuName, 'pass', memberName); }
+      catch (err) { console.error('[Vote] pass DB 저장 실패:', err.message); }
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    try {
+      await updateSettings({ vote_deadline: editDeadline, min_voters: Number(editMinVoters) });
+      setShowSettings(false);
+    } catch (err) {
+      alert('설정 저장 실패: ' + err.message);
     }
   };
 
@@ -126,14 +128,68 @@ export default function Vote() {
           <h1 style={styles.headerTitle}>🍽️ 런치픽</h1>
           <p style={styles.headerSub}>{teamName} · {memberName}</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {inviteLink && (
             <button style={styles.btnInvite} onClick={() => setShowInvite(true)}>팀원 초대</button>
           )}
+          <button style={styles.btnGhost} onClick={() => setShowSettings(true)}>⚙️ 설정</button>
           <button style={styles.btnGhost} onClick={() => navigate('/result')}>결과 보기</button>
           <button style={styles.btnGhost} onClick={handleLogout}>나가기</button>
         </div>
       </header>
+
+      {/* 투표 마감 배너 */}
+      {isVotingClosed ? (
+        <div style={styles.closedBanner}>
+          🔒 투표 마감됨 ({settings.vote_deadline}) — 결과를 확인하세요
+        </div>
+      ) : (
+        <div style={styles.openBanner}>
+          ⏰ 투표 마감: {settings.vote_deadline} · 최소 {settings.min_voters}명 참여 필요
+        </div>
+      )}
+
+      {/* 설정 모달 */}
+      {showSettings && (
+        <div style={styles.modalOverlay} onClick={() => setShowSettings(false)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 1rem' }}>⚙️ 투표 설정</h3>
+
+            <label style={styles.label}>투표 마감 시간</label>
+            <input
+              type="time"
+              style={styles.input}
+              value={editDeadline}
+              onChange={(e) => setEditDeadline(e.target.value)}
+            />
+
+            <label style={{ ...styles.label, marginTop: '0.75rem' }}>최소 참여 인원</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <button
+                style={styles.stepBtn}
+                onClick={() => setEditMinVoters((n) => Math.max(1, n - 1))}
+              >−</button>
+              <span style={{ fontSize: '1.2rem', fontWeight: 'bold', minWidth: '24px', textAlign: 'center' }}>
+                {editMinVoters}
+              </span>
+              <button
+                style={styles.stepBtn}
+                onClick={() => setEditMinVoters((n) => n + 1)}
+              >+</button>
+              <span style={{ fontSize: '0.85rem', color: '#888' }}>명 이상 투표해야 확정 가능</span>
+            </div>
+
+            <button
+              style={{ ...styles.btnPrimary, marginTop: '1.25rem' }}
+              onClick={handleSaveSettings}
+              disabled={saving}
+            >
+              {saving ? '저장 중...' : '저장'}
+            </button>
+            <button style={styles.btnClose} onClick={() => setShowSettings(false)}>닫기</button>
+          </div>
+        </div>
+      )}
 
       {/* 초대 모달 */}
       {showInvite && (
@@ -166,8 +222,12 @@ export default function Vote() {
           </div>
         )}
 
-        <button style={styles.btnPrimary} onClick={fetchNearby} disabled={loadingRestaurants}>
-          {loadingRestaurants ? '검색 중...' : '📍 내 주변 식당 찾기'}
+        <button
+          style={{ ...styles.btnPrimary, opacity: isVotingClosed ? 0.5 : 1 }}
+          onClick={fetchNearby}
+          disabled={loadingRestaurants || isVotingClosed}
+        >
+          {loadingRestaurants ? '검색 중...' : isVotingClosed ? '🔒 투표 마감됨' : '📍 내 주변 식당 찾기'}
         </button>
 
         {locationError && <p style={{ color: 'red', margin: '0.5rem 0' }}>오류: {locationError}</p>}
@@ -196,36 +256,39 @@ export default function Vote() {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
-                      {/* ok 카운트 */}
                       {okCount > 0 && (
                         <span style={styles.countBadge}>👍 {okCount}</span>
                       )}
 
-                      {/* 괜찮아요: 이미 이 식당을 ok했으면 뱃지, 아니면 버튼 */}
-                      {isOked ? (
-                        <span style={styles.badgeOk}>✓ 괜찮아요</span>
+                      {/* 마감 후엔 뱃지만 표시 */}
+                      {isVotingClosed ? (
+                        <>
+                          {isOked && <span style={styles.badgeOk}>✓ 괜찮아요</span>}
+                          {isPassed && !isOked && <span style={styles.badgePass}>✗ 패스</span>}
+                        </>
                       ) : (
-                        <button
-                          style={{ ...styles.btnOk, opacity: myOkMenu ? 0.3 : 1, cursor: myOkMenu ? 'not-allowed' : 'pointer' }}
-                          onClick={() => handleOk(r)}
-                          disabled={!!myOkMenu}
-                        >
-                          괜찮아요
-                        </button>
-                      )}
-
-                      {/* 패스: 이미 이 식당을 패스했으면 뱃지, 아니면 버튼 (ok한 식당엔 숨김) */}
-                      {!isOked && (
-                        isPassed ? (
-                          <span style={styles.badgePass}>✗ 패스</span>
-                        ) : (
-                          <button
-                            style={styles.btnPass}
-                            onClick={() => handlePass(r)}
-                          >
-                            패스
-                          </button>
-                        )
+                        <>
+                          {isOked ? (
+                            <span style={styles.badgeOk}>✓ 괜찮아요</span>
+                          ) : (
+                            <button
+                              style={{ ...styles.btnOk, opacity: myOkMenu ? 0.3 : 1, cursor: myOkMenu ? 'not-allowed' : 'pointer' }}
+                              onClick={() => handleOk(r)}
+                              disabled={!!myOkMenu}
+                            >
+                              괜찮아요
+                            </button>
+                          )}
+                          {!isOked && (
+                            isPassed ? (
+                              <span style={styles.badgePass}>✗ 패스</span>
+                            ) : (
+                              <button style={styles.btnPass} onClick={() => handlePass(r)}>
+                                패스
+                              </button>
+                            )
+                          )}
+                        </>
                       )}
                     </div>
                   </li>
@@ -247,6 +310,15 @@ const styles = {
   },
   headerTitle: { margin: 0, fontSize: '1.3rem' },
   headerSub: { margin: 0, fontSize: '0.85rem', color: '#666' },
+  openBanner: {
+    background: '#fff7ed', borderBottom: '1px solid #fed7aa',
+    padding: '0.5rem 1.5rem', fontSize: '0.85rem', color: '#c2410c', textAlign: 'center',
+  },
+  closedBanner: {
+    background: '#fef2f2', borderBottom: '1px solid #fecaca',
+    padding: '0.5rem 1.5rem', fontSize: '0.85rem', color: '#dc2626', textAlign: 'center',
+    fontWeight: 'bold',
+  },
   main: { padding: '1.5rem', maxWidth: '720px', margin: '0 auto' },
   sectionTitle: { fontSize: '1rem', color: '#444', margin: '0 0 0.75rem' },
   summaryBox: {
@@ -306,6 +378,16 @@ const styles = {
   btnClose: {
     marginTop: '0.75rem', width: '100%', padding: '0.6rem',
     fontSize: '0.9rem', background: 'transparent', color: '#999', border: 'none', cursor: 'pointer',
+  },
+  stepBtn: {
+    width: '32px', height: '32px', borderRadius: '50%', border: '1px solid #ddd',
+    background: '#f9fafb', fontSize: '1.1rem', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold',
+  },
+  label: { display: 'block', fontSize: '0.85rem', color: '#555', marginBottom: '0.4rem', fontWeight: '600' },
+  input: {
+    width: '100%', padding: '0.6rem 0.75rem', fontSize: '1rem',
+    border: '1px solid #ddd', borderRadius: '8px', boxSizing: 'border-box',
   },
   modalOverlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',

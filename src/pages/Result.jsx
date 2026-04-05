@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useVotes } from '../hooks/useVotes';
+import { useTeamSettings } from '../hooks/useTeamSettings';
 import { storage } from '../lib/storage';
 
 export default function Result() {
@@ -8,6 +9,7 @@ export default function Result() {
   const { teamId, teamName } = storage.load();
 
   const { votes, todayHistory, okCountByMenu, clearVotes, recordToHistory, loading } = useVotes(teamId);
+  const { settings, isVotingClosed } = useTeamSettings(teamId);
 
   useEffect(() => {
     if (!teamId) navigate('/');
@@ -18,12 +20,37 @@ export default function Result() {
   const ranked = Object.entries(okCountByMenu).sort(([, a], [, b]) => b - a);
   const topMenu = ranked[0]?.[0];
   const totalVoters = new Set(votes.map((v) => v.voter_name)).size;
+  const minVoters = settings.min_voters ?? 2;
+  const canConfirm = isVotingClosed && totalVoters >= minVoters;
 
   const handlePickTop = async () => {
-    if (!topMenu) return;
+    if (!topMenu || !canConfirm) return;
     await recordToHistory(topMenu);
     await clearVotes();
     navigate('/vote');
+  };
+
+  const voterStatus = () => {
+    if (totalVoters === 0) return null;
+    if (!isVotingClosed) {
+      return (
+        <p style={styles.statusInfo}>
+          현재 <strong>{totalVoters}명</strong> 투표 중 · 마감({settings.vote_deadline}) 후 {minVoters}명 이상이면 확정 가능
+        </p>
+      );
+    }
+    if (totalVoters < minVoters) {
+      return (
+        <p style={styles.statusWarn}>
+          ⚠️ {totalVoters}명 참여 — 최소 {minVoters}명이 필요해요. 확정할 수 없습니다.
+        </p>
+      );
+    }
+    return (
+      <p style={styles.statusOk}>
+        ✅ {totalVoters}명 참여 완료 · 투표 마감됨
+      </p>
+    );
   };
 
   return (
@@ -41,6 +68,8 @@ export default function Result() {
       <main style={styles.main}>
         {loading && <p style={{ color: '#999' }}>로딩 중...</p>}
 
+        {voterStatus()}
+
         {ranked.length > 0 ? (
           <section style={{ marginBottom: '2rem' }}>
             <h2 style={styles.sectionTitle}>메뉴 순위</h2>
@@ -55,10 +84,21 @@ export default function Result() {
                 </li>
               ))}
             </ul>
+
             {topMenu && (
-              <button style={{ ...styles.btnPrimary, marginTop: '1rem' }} onClick={handlePickTop}>
-                "{topMenu}" 오늘 먹기로 확정!
-              </button>
+              <div style={{ marginTop: '1rem' }}>
+                {canConfirm ? (
+                  <button style={styles.btnPrimary} onClick={handlePickTop}>
+                    "{topMenu}" 오늘 먹기로 확정!
+                  </button>
+                ) : (
+                  <button style={{ ...styles.btnPrimary, ...styles.btnDisabled }} disabled>
+                    {!isVotingClosed
+                      ? `⏰ 마감 전 (${settings.vote_deadline}까지 투표)`
+                      : `참여 인원 부족 (${totalVoters}/${minVoters}명)`}
+                  </button>
+                )}
+              </div>
             )}
           </section>
         ) : (
@@ -82,68 +122,56 @@ export default function Result() {
 
 const styles = {
   header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '1rem 1.5rem',
-    borderBottom: '1px solid #eee',
-    background: '#fff',
-    position: 'sticky',
-    top: 0,
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '1rem 1.5rem', borderBottom: '1px solid #eee',
+    background: '#fff', position: 'sticky', top: 0,
   },
   headerTitle: { margin: 0, fontSize: '1.3rem' },
   headerSub: { margin: 0, fontSize: '0.85rem', color: '#666' },
   main: { padding: '1.5rem', maxWidth: '720px', margin: '0 auto' },
   sectionTitle: { fontSize: '1rem', color: '#444', margin: '0 0 0.75rem' },
+  statusInfo: {
+    fontSize: '0.9rem', color: '#6b7280', background: '#f9fafb',
+    border: '1px solid #e5e7eb', borderRadius: '8px',
+    padding: '0.65rem 1rem', marginBottom: '1rem',
+  },
+  statusWarn: {
+    fontSize: '0.9rem', color: '#b45309', background: '#fffbeb',
+    border: '1px solid #fde68a', borderRadius: '8px',
+    padding: '0.65rem 1rem', marginBottom: '1rem',
+  },
+  statusOk: {
+    fontSize: '0.9rem', color: '#15803d', background: '#f0fdf4',
+    border: '1px solid #bbf7d0', borderRadius: '8px',
+    padding: '0.65rem 1rem', marginBottom: '1rem',
+  },
   card: {
-    border: '1px solid #eee',
-    borderRadius: '10px',
-    padding: '0.9rem 1rem',
-    marginBottom: '0.5rem',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    border: '1px solid #eee', borderRadius: '10px',
+    padding: '0.9rem 1rem', marginBottom: '0.5rem',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
   },
   rank: {
-    width: '28px',
-    height: '28px',
-    borderRadius: '50%',
-    background: '#ff6b35',
-    color: '#fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '0.85rem',
-    fontWeight: 'bold',
-    flexShrink: 0,
+    width: '28px', height: '28px', borderRadius: '50%',
+    background: '#ff6b35', color: '#fff',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: '0.85rem', fontWeight: 'bold', flexShrink: 0,
   },
   okCount: { fontSize: '0.95rem', color: '#555' },
   btnPrimary: {
-    padding: '0.75rem 1.5rem',
-    fontSize: '1rem',
-    background: '#ff6b35',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-    width: '100%',
+    padding: '0.75rem 1.5rem', fontSize: '1rem', background: '#ff6b35',
+    color: '#fff', border: 'none', borderRadius: '8px',
+    cursor: 'pointer', fontWeight: 'bold', width: '100%',
+  },
+  btnDisabled: {
+    background: '#d1d5db', cursor: 'not-allowed', color: '#6b7280',
   },
   btnGhost: {
-    padding: '0.4rem 0.75rem',
-    fontSize: '0.85rem',
-    background: 'transparent',
-    color: '#666',
-    border: '1px solid #ddd',
-    borderRadius: '6px',
-    cursor: 'pointer',
+    padding: '0.4rem 0.75rem', fontSize: '0.85rem', background: 'transparent',
+    color: '#666', border: '1px solid #ddd', borderRadius: '6px', cursor: 'pointer',
   },
   historyItem: {
-    padding: '0.6rem 1rem',
-    borderRadius: '8px',
-    background: '#f9fafb',
-    marginBottom: '0.5rem',
-    fontSize: '0.95rem',
+    padding: '0.6rem 1rem', borderRadius: '8px', background: '#f9fafb',
+    marginBottom: '0.5rem', fontSize: '0.95rem',
   },
 };
