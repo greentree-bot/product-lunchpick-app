@@ -29,7 +29,11 @@ export default function Vote() {
 
   if (!teamId || !memberName) return null;
 
-  const myVote = votes.find((v) => v.voter_name === memberName);
+  // 오늘 날짜 기준으로만 내 투표 확인 (이전 날 투표가 버튼을 막지 않도록)
+  const today = new Date().toISOString().slice(0, 10);
+  const myVote = votes.find(
+    (v) => v.voter_name === memberName && v.voted_at?.slice(0, 10) === today
+  );
 
   const handleLogout = () => {
     storage.clear();

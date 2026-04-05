@@ -119,6 +119,21 @@ export function useVotes(teamId) {
     if (!['ok', 'pass'].includes(action)) {
       throw new Error("action은 'ok' 또는 'pass'여야 합니다.");
     }
+
+    // teamId가 없으면 로컬 상태에만 반영 (개인 모드)
+    if (!teamId || !isValidUUID(teamId)) {
+      const localVote = {
+        id: `local-${Date.now()}`,
+        team_id: null,
+        menu_name: menuName,
+        action,
+        voter_name: voterName,
+        voted_at: new Date().toISOString(),
+      };
+      setVotes((prev) => [...prev, localVote]);
+      return localVote;
+    }
+
     const { data, error } = await supabase
       .from('votes')
       .insert({ team_id: teamId, menu_name: menuName, action, voter_name: voterName })
