@@ -14,10 +14,17 @@ export function useTeam() {
     setLoading(true);
     setError(null);
     try {
+      // 생성 시각 + 10분을 기본 마감 시간으로 설정
+      const deadline = (() => {
+        const d = new Date();
+        d.setMinutes(d.getMinutes() + 10);
+        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      })();
+
       // 1. teams 테이블에 팀 생성
       const { data: team, error: teamErr } = await supabase
         .from('teams')
-        .insert({ name: teamName })
+        .insert({ name: teamName, vote_deadline: deadline, min_voters: 2 })
         .select()
         .single();
       if (teamErr) throw teamErr;

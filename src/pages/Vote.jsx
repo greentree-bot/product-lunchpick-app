@@ -150,7 +150,7 @@ export default function Vote() {
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 1rem' }}>⚙️ 투표 설정</h3>
 
-            <label style={styles.label}>투표 마감 시간</label>
+            <label style={styles.label}>투표 마감 시간 (팀 생성 후 기본 10분)</label>
             <input
               type="time"
               style={styles.input}
