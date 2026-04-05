@@ -1,0 +1,81 @@
+import { useState } from 'react';
+import { supabase } from '../lib/supabase';
+import { storage } from '../lib/storage';
+
+/**
+ * 팀 생성 / 초대코드로 팀 참여
+ */
+export function useTeam() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // ─── 팀 생성 + 팀장을 members에 등록 ────────────────────────────────────
+  const createTeam = async (teamName, memberName) => {
+    setLoading(true);
+    setError(null);
+    try {
+      // 1. teams 테이블에 팀 생성
+      const { data: team, error: teamErr } = await supabase
+        .from('teams')
+        .insert({ name: teamName })
+        .select()
+        .single();
+      if (teamErr) throw teamErr;
+
+      // 2. members 테이블에 팀장 등록
+      const { error: memberErr } = await supabase
+        .from('members')
+        .insert({ team_id: team.id, name: memberName });
+      if (memberErr) throw memberErr;
+
+      // 3. localStorage 저장
+      storage.save({ teamId: team.id, memberName, teamName: team.name });
+
+      return team; // { id, name, invite_code, created_at }
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── 초대코드로 팀 조회 ──────────────────────────────────────────────────
+  const getTeamByCode = async (inviteCode) => {
+    const { data, error } = await supabase
+      .from('teams')
+      .select('*')
+      .eq('invite_code', inviteCode)
+      .single();
+    if (error) throw new Error('유효하지 않은 초대 코드입니다.');
+    return data;
+  };
+
+  // ─── 초대코드로 팀 참여 ──────────────────────────────────────────────────
+  const joinTeam = async (inviteCode, memberName) => {
+    setLoading(true);
+    setError(null);
+    try {
+      // 1. 초대코드로 팀 조회
+      const team = await getTeamByCode(inviteCode);
+
+      // 2. members 테이블에 등록
+      const { error: memberErr } = await supabase
+        .from('members')
+        .insert({ team_id: team.id, name: memberName });
+      if (memberErr) throw memberErr;
+
+      // 3. localStorage 저장
+      storage.save({ teamId: team.id, memberName, teamName: team.name });
+
+      return team;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { createTeam, joinTeam, getTeamByCode, loading, error };
+}

@@ -1,18 +1,18 @@
-CREATE TABLE teams (
+CREATE TABLE IF NOT EXISTS teams (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   name text NOT NULL,
   invite_code text UNIQUE DEFAULT substr(md5(random()::text), 1, 8),
   created_at timestamptz DEFAULT now()
 );
 
-CREATE TABLE members (
+CREATE TABLE IF NOT EXISTS members (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   team_id uuid REFERENCES teams(id) ON DELETE CASCADE,
   name text NOT NULL,
   created_at timestamptz DEFAULT now()
 );
 
-CREATE TABLE votes (
+CREATE TABLE IF NOT EXISTS votes (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   team_id uuid REFERENCES teams(id) ON DELETE CASCADE,
   menu_name text NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE votes (
   voted_at timestamptz DEFAULT now()
 );
 
-CREATE TABLE history (
+CREATE TABLE IF NOT EXISTS history (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   team_id uuid REFERENCES teams(id) ON DELETE CASCADE,
   menu_name text NOT NULL,
@@ -29,5 +29,5 @@ CREATE TABLE history (
   created_at timestamptz DEFAULT now()
 );
 
-ALTER TABLE votes REPLICA IDENTITY FULL;
-ALTER TABLE members REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS votes REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS members REPLICA IDENTITY FULL;
