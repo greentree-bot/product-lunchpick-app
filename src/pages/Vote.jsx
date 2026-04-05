@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useVotes } from '../hooks/useVotes';
 import { useNearbyRestaurants } from '../hooks/useNearbyRestaurants';
@@ -23,17 +23,54 @@ export default function Vote() {
     fetchNearby,
   } = useNearbyRestaurants(weekMenuSet);
 
+  // UI 전용 로컬 투표 상태 (DB 저장 실패 시 fallback)
+  const [localVote, setLocalVote] = useState(null);
+
   useEffect(() => {
     if (!teamId || !memberName) navigate('/');
   }, [teamId, memberName, navigate]);
 
   if (!teamId || !memberName) return null;
 
-  // 오늘 날짜 기준으로만 내 투표 확인 (이전 날 투표가 버튼을 막지 않도록)
+  // 오늘 날짜 (UTC 기준)
   const today = new Date().toISOString().slice(0, 10);
-  const myVote = votes.find(
+
+  // DB 투표 중 오늘 것만 확인
+  const dbVote = votes.find(
     (v) => v.voter_name === memberName && v.voted_at?.slice(0, 10) === today
   );
+
+  // DB 투표 없으면 로컬 투표 사용
+  const myVote = dbVote || localVote;
+
+  console.log('[Vote] 상태:', { teamId, memberName, votesCount: votes.length, myVote, today });
+
+  const handleVote = async (menuName, action) => {
+    console.log('[Vote] 버튼 클릭:', { teamId, memberName, menuName, action, currentMyVote: myVote });
+
+    if (myVote) {
+      console.log('[Vote] 이미 투표함 → 무시');
+      return;
+    }
+
+    // UI 즉시 반영 (낙관적 업데이트)
+    const optimistic = {
+      id: `local-${Date.now()}`,
+      menu_name: menuName,
+      action,
+      voter_name: memberName,
+      voted_at: new Date().toISOString(),
+    };
+    setLocalVote(optimistic);
+
+    try {
+      await castVote(menuName, action, memberName);
+      console.log('[Vote] DB 저장 성공');
+    } catch (err) {
+      console.error('[Vote] DB 저장 실패 (로컬 상태 유지):', err.message);
+      // 로컬 상태는 유지 → UI는 정상 동작
+    }
+  };
 
   const handleLogout = () => {
     storage.clear();
@@ -76,9 +113,7 @@ export default function Vote() {
                 <li key={r.id} style={styles.card}>
                   <div>
                     <strong style={{ fontSize: '1rem' }}>{r.name}</strong>
-                    <p style={styles.cardSub}>
-                      {r.category} · {r.distance}m
-                    </p>
+                    <p style={styles.cardSub}>{r.category} · {r.distance}m</p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={styles.okCount}>
@@ -91,15 +126,15 @@ export default function Vote() {
                     ) : (
                       <>
                         <button
-                          style={styles.btnOk}
-                          onClick={() => castVote(r.name, 'ok', memberName)}
+                          style={{ ...styles.btnOk, opacity: myVote ? 0.4 : 1 }}
+                          onClick={() => handleVote(r.name, 'ok')}
                           disabled={!!myVote}
                         >
                           괜찮아요
                         </button>
                         <button
-                          style={styles.btnPass}
-                          onClick={() => castVote(r.name, 'pass', memberName)}
+                          style={{ ...styles.btnPass, opacity: myVote ? 0.4 : 1 }}
+                          onClick={() => handleVote(r.name, 'pass')}
                           disabled={!!myVote}
                         >
                           패스
