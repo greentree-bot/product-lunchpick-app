@@ -30,14 +30,6 @@ export default function Home() {
     if (teamId && memberName) navigate('/vote');
   }, [navigate]);
 
-  // 카카오 SDK 초기화 (JavaScript 키)
-  useEffect(() => {
-    const jsKey = process.env.REACT_APP_KAKAO_JS_KEY;
-    if (!jsKey) return;
-    if (window.Kakao && !window.Kakao.isInitialized()) {
-      window.Kakao.init(jsKey);
-    }
-  }, []);
 
   // ─── 팀 만들기 ────────────────────────────────────────────────────────────
   const handleCreate = async (e) => {
@@ -75,37 +67,18 @@ export default function Home() {
     }
   };
 
-  // ─── 카카오톡 공유 ────────────────────────────────────────────────────────
-  const shareKakao = () => {
-    // 카카오 SDK로 친구 선택 후 직접 메시지 전송
-    if (window.Kakao?.Share) {
-      window.Kakao.Share.sendDefault({
-        objectType: 'feed',
-        content: {
-          title: `[런치픽] ${teamName || '우리팀'} 점심 투표에 초대합니다 🍽️`,
-          description: '지금 참여해서 오늘 점심 메뉴를 함께 골라요!',
-          imageUrl: `${APP_URL}/logo192.png`,
-          link: {
-            mobileWebUrl: inviteLink,
-            webUrl: inviteLink,
-          },
-        },
-        buttons: [
-          {
-            title: '팀 참여하기',
-            link: {
-              mobileWebUrl: inviteLink,
-              webUrl: inviteLink,
-            },
-          },
-        ],
-      });
-    } else if (navigator.share) {
-      // SDK 없으면 Web Share API (모바일 공유 시트)
-      navigator.share({ title: '런치픽 팀 초대', url: inviteLink });
+  // ─── 공유하기 ────────────────────────────────────────────────────────────
+  const handleShare = async () => {
+    const shareData = {
+      title: '런치픽 팀 초대',
+      text: '오늘 점심 같이 골라요! 아래 링크로 참여해주세요.',
+      url: inviteLink,
+    };
+    if (navigator.share) {
+      await navigator.share(shareData);
     } else {
-      // 최후 fallback: 클립보드 복사
-      copyLink();
+      navigator.clipboard.writeText(inviteLink);
+      alert('링크가 복사됐습니다! 카카오톡에 붙여넣기 하세요.');
     }
   };
 
@@ -122,8 +95,8 @@ export default function Home() {
             <button style={styles.btnSecondary} onClick={copyLink}>
               {copied ? '✓ 복사됨' : '링크 복사'}
             </button>
-            <button style={styles.btnKakao} onClick={shareKakao}>
-              카카오톡 공유
+            <button style={styles.btnKakao} onClick={handleShare}>
+              공유하기
             </button>
           </div>
           <button

@@ -100,23 +100,18 @@ export default function Vote() {
     }
   };
 
-  const shareKakao = () => {
+  const handleShare = async () => {
     if (!inviteLink) return;
-    if (window.Kakao?.Share) {
-      window.Kakao.Share.sendDefault({
-        objectType: 'feed',
-        content: {
-          title: `[런치픽] ${teamName} 점심 투표에 초대합니다 🍽️`,
-          description: '지금 참여해서 오늘 점심 메뉴를 함께 골라요!',
-          imageUrl: `${APP_URL}/logo192.png`,
-          link: { mobileWebUrl: inviteLink, webUrl: inviteLink },
-        },
-        buttons: [{ title: '팀 참여하기', link: { mobileWebUrl: inviteLink, webUrl: inviteLink } }],
-      });
-    } else if (navigator.share) {
-      navigator.share({ title: '런치픽 팀 초대', url: inviteLink });
+    const shareData = {
+      title: '런치픽 팀 초대',
+      text: '오늘 점심 같이 골라요! 아래 링크로 참여해주세요.',
+      url: inviteLink,
+    };
+    if (navigator.share) {
+      await navigator.share(shareData);
     } else {
-      copyLink();
+      navigator.clipboard.writeText(inviteLink);
+      alert('링크가 복사됐습니다! 카카오톡에 붙여넣기 하세요.');
     }
   };
 
@@ -204,7 +199,7 @@ export default function Vote() {
               <button style={styles.btnSecondary} onClick={copyLink}>
                 {copied ? '✓ 복사됨' : '링크 복사'}
               </button>
-              <button style={styles.btnKakao} onClick={shareKakao}>카카오톡 공유</button>
+              <button style={styles.btnKakao} onClick={handleShare}>공유하기</button>
             </div>
             <button style={styles.btnClose} onClick={() => setShowInvite(false)}>닫기</button>
           </div>
