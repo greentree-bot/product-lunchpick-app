@@ -12,7 +12,7 @@ export default function Vote() {
   const { teamId, memberName, teamName, inviteCode } = storage.load();
   const inviteLink = inviteCode ? `${APP_URL}/join/${inviteCode}` : null;
 
-  const { votes, weekMenuSet, loading: loadingVotes, castVote, okCountByMenu } = useVotes(teamId);
+  const { votes, weekMenuSet, loading: loadingVotes, castVote, okCountByMenu, passCountByMenu } = useVotes(teamId);
   const { restaurants, loading: loadingRestaurants, error: locationError, fetchNearby } = useNearbyRestaurants(weekMenuSet);
   const { settings, updateSettings, saving, isVotingClosed } = useTeamSettings(teamId);
 
@@ -55,6 +55,7 @@ export default function Vote() {
 
   // ─── 카운트 계산 ─────────────────────────────────────────────────────────
   const getOkCount = (menuName) => (okCountByMenu[menuName] ?? 0) + (localOkCounts[menuName] ?? 0);
+  const getPassCount = (menuName) => passCountByMenu[menuName] ?? 0;
 
   // ─── 투표 핸들러 ─────────────────────────────────────────────────────────
   const handleOk = async (restaurant) => {
@@ -233,9 +234,10 @@ export default function Vote() {
             <h2 style={styles.sectionTitle}>주변 식당 {restaurants.length}곳</h2>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               {restaurants.map((r) => {
-                const isOked   = myOkMenu === r.name;
-                const isPassed = myPassSet.has(r.name);
-                const okCount  = getOkCount(r.name);
+                const isOked     = myOkMenu === r.name;
+                const isPassed   = myPassSet.has(r.name);
+                const okCount    = getOkCount(r.name);
+                const passCount  = getPassCount(r.name);
 
                 return (
                   <li key={r.id} style={{
@@ -253,6 +255,9 @@ export default function Vote() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
                       {okCount > 0 && (
                         <span style={styles.countBadge}>👍 {okCount}</span>
+                      )}
+                      {passCount > 0 && (
+                        <span style={styles.passBadge}>👎 {passCount}</span>
                       )}
 
                       {/* 마감 후엔 뱃지만 표시 */}
@@ -331,6 +336,7 @@ const styles = {
   },
   cardSub: { margin: '0.2rem 0 0', fontSize: '0.85rem', color: '#888' },
   countBadge: { fontSize: '0.85rem', color: '#555', minWidth: '36px' },
+  passBadge: { fontSize: '0.85rem', color: '#ef4444', minWidth: '36px' },
   badgeOk: {
     fontSize: '0.8rem', color: '#22c55e', fontWeight: 'bold',
     background: '#f0fdf4', padding: '0.25rem 0.5rem', borderRadius: '6px',

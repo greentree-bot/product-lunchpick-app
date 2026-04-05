@@ -8,7 +8,7 @@ export default function Result() {
   const navigate = useNavigate();
   const { teamId, teamName } = storage.load();
 
-  const { votes, todayHistory, okCountByMenu, clearVotes, recordToHistory, loading } = useVotes(teamId);
+  const { votes, todayHistory, okCountByMenu, passCountByMenu, clearVotes, recordToHistory, loading } = useVotes(teamId);
   const { settings, isVotingClosed } = useTeamSettings(teamId);
 
   useEffect(() => {
@@ -80,7 +80,12 @@ export default function Result() {
                     <span style={styles.rank}>{i + 1}</span>
                     <strong>{menu}</strong>
                   </div>
-                  <span style={styles.okCount}>👍 {count}</span>
+                  <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                    <span style={styles.okCount}>👍 {count}</span>
+                    {(passCountByMenu[menu] ?? 0) > 0 && (
+                      <span style={styles.passCount}>👎 {passCountByMenu[menu]}</span>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -158,6 +163,7 @@ const styles = {
     fontSize: '0.85rem', fontWeight: 'bold', flexShrink: 0,
   },
   okCount: { fontSize: '0.95rem', color: '#555' },
+  passCount: { fontSize: '0.95rem', color: '#ef4444' },
   btnPrimary: {
     padding: '0.75rem 1.5rem', fontSize: '1rem', background: '#ff6b35',
     color: '#fff', border: 'none', borderRadius: '8px',

@@ -201,6 +201,14 @@ export function useVotes(teamId) {
       return acc;
     }, {});
 
+  // 메뉴별 pass 수
+  const passCountByMenu = votes
+    .filter((v) => v.action === 'pass')
+    .reduce((acc, v) => {
+      acc[v.menu_name] = (acc[v.menu_name] || 0) + 1;
+      return acc;
+    }, {});
+
   // 이번 주에 이미 먹은 메뉴 Set (중복 방지 필터링용)
   const weekMenuSet = new Set(weekHistory);
 
@@ -214,6 +222,7 @@ export function useVotes(teamId) {
     error,
     // 파생
     okCountByMenu,
+    passCountByMenu,
     // 액션
     castVote,
     recordToHistory,
