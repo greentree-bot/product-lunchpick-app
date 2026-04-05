@@ -64,7 +64,7 @@ export function useVotes(teamId) {
       .from('votes')
       .select('*')
       .eq('team_id', teamId)
-      .order('voted_at', { ascending: true });
+      .order('voted_at', { ascending: false });
 
     if (error) setError(error);
     else setVotes(data);
@@ -134,13 +134,32 @@ export function useVotes(teamId) {
       return localVote;
     }
 
+    // 로컬 state 즉시 반영 (낙관적 업데이트)
+    const optimistic = {
+      id: `optimistic-${Date.now()}`,
+      team_id: teamId,
+      menu_name: menuName,
+      action,
+      voter_name: voterName,
+      voted_at: new Date().toISOString(),
+    };
+    setVotes((prev) => [...prev, optimistic]);
+
+    // DB 백그라운드 저장
     const { data, error } = await supabase
       .from('votes')
       .insert({ team_id: teamId, menu_name: menuName, action, voter_name: voterName })
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // 실패 시 낙관적 항목 롤백
+      setVotes((prev) => prev.filter((v) => v.id !== optimistic.id));
+      throw error;
+    }
+
+    // 서버 응답으로 낙관적 항목 교체
+    setVotes((prev) => prev.map((v) => (v.id === optimistic.id ? data : v)));
     return data;
   };
 
