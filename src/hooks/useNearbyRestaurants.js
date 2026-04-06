@@ -31,7 +31,24 @@ function toMenuCard(place) {
     url: place.place_url,
     lat: Number(place.y),
     lng: Number(place.x),
+    starScore: null,
+    reviewCount: null,
   };
+}
+
+async function fetchStarScores(cards) {
+  const results = await Promise.allSettled(
+    cards.map((card) =>
+      fetch(`/api/kakaoplace?id=${card.id}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)
+    )
+  );
+  return cards.map((card, i) => {
+    const detail = results[i].status === 'fulfilled' ? results[i].value : null;
+    if (!detail || detail.error) return card;
+    return { ...card, starScore: detail.starScore, reviewCount: detail.reviewCount };
+  });
 }
 
 // ─── 훅 ──────────────────────────────────────────────────────────────────────
@@ -91,6 +108,10 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
         .filter((card) => !weekMenuSet.has(card.name));
 
       setRestaurants(filtered);
+
+      // 별점 병렬 조회 후 업데이트
+      const withStars = await fetchStarScores(filtered);
+      setRestaurants(withStars);
 
     } catch (err) {
       console.error('[useNearbyRestaurants]', err.message);
