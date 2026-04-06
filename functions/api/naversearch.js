@@ -2,9 +2,9 @@
  * 네이버 지역 검색 API 프록시
  * GET /api/naversearch?lat={lat}&lng={lng}&radius={radius}
  *
- * 1. Kakao 역지오코딩으로 현재 위치 동 이름 추출
- * 2. 네이버 로컬 검색으로 "[동] 음식점" 검색 (3페이지 × 5개)
- * 3. mapx/mapy → WGS84 변환 후 거리 계산 → radius 내 필터링
+ * 1. OpenStreetMap Nominatim으로 현재 위치 동 이름 추출 (키 불필요)
+ * 2. 네이버 로컬 검색으로 "[동] 음식점" 검색
+ * 3. mapx/mapy(WGS84 × 1e7) → 거리 계산 → radius 내 필터링
  */
 
 function haversine(lat1, lng1, lat2, lng2) {
@@ -33,7 +33,6 @@ export async function onRequestGet(context) {
 
   const NAVER_CLIENT_ID = context.env.NAVER_CLIENT_ID;
   const NAVER_CLIENT_SECRET = context.env.NAVER_CLIENT_SECRET;
-  const KAKAO_MAP_KEY = context.env.KAKAO_MAP_KEY;
 
   if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
     return jsonRes({ error: 'NAVER_CLIENT_ID 또는 NAVER_CLIENT_SECRET이 설정되지 않았습니다.' }, 500);
@@ -45,29 +44,41 @@ export async function onRequestGet(context) {
   const userLat = parseFloat(lat);
   const userLng = parseFloat(lng);
 
-  // ─── 1. 역지오코딩으로 동 이름 추출 (Kakao) ─────────────────────────────
+  // ─── 1. Nominatim 역지오코딩으로 동 이름 추출 (무료, 키 불필요) ────────────
   let searchQuery = '음식점';
-  if (KAKAO_MAP_KEY) {
-    try {
-      const geoRes = await fetch(
-        `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${lng}&y=${lat}`,
-        { headers: { Authorization: `KakaoAK ${KAKAO_MAP_KEY}` } }
-      );
-      if (geoRes.ok) {
-        const geoData = await geoRes.json();
-        const region = geoData.documents?.[0];
-        const dong =
-          region?.region_3depth_name ||
-          region?.region_2depth_name ||
-          region?.region_1depth_name;
-        if (dong) searchQuery = `${dong} 음식점`;
+  try {
+    const nomRes = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=15&addressdetails=1`,
+      {
+        headers: {
+          'User-Agent': 'LunchPick/1.0 (lunchpick.pages.dev)',
+          'Accept-Language': 'ko',
+        },
       }
-    } catch {
-      // 역지오코딩 실패 시 기본 쿼리 사용
+    );
+    if (nomRes.ok) {
+      const nomData = await nomRes.json();
+      const addr = nomData.address ?? {};
+      // 동 > 구 > 도시 순으로 가장 세밀한 지역명 사용
+      const area =
+        addr.quarter ||
+        addr.neighbourhood ||
+        addr.suburb ||
+        addr.city_district ||
+        addr.county ||
+        addr.city;
+      if (area) {
+        searchQuery = `${area} 음식점`;
+        console.log('[naversearch] 역지오코딩 성공:', searchQuery);
+      } else {
+        console.log('[naversearch] 역지오코딩 결과 없음, 기본 쿼리 사용');
+      }
     }
+  } catch (e) {
+    console.log('[naversearch] 역지오코딩 실패:', e.message);
   }
 
-  // ─── 2. 네이버 지역 검색 (3페이지 병렬) ─────────────────────────────────
+  // ─── 2. 네이버 지역 검색 (3페이지 병렬, 최대 15개) ───────────────────────
   const naverHeaders = {
     'X-Naver-Client-Id': NAVER_CLIENT_ID,
     'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
@@ -82,33 +93,50 @@ export async function onRequestGet(context) {
             `?query=${encodeURIComponent(searchQuery)}&display=5&start=${start}&sort=comment`,
           { headers: naverHeaders }
         )
-          .then((r) => (r.ok ? r.json() : { items: [] }))
-          .catch(() => ({ items: [] }))
+          .then(async (r) => {
+            if (!r.ok) {
+              const errText = await r.text();
+              console.log(`[naversearch] 네이버 API 오류 ${r.status}:`, errText);
+              return { items: [] };
+            }
+            return r.json();
+          })
+          .catch((e) => {
+            console.log('[naversearch] 네이버 fetch 실패:', e.message);
+            return { items: [] };
+          })
       )
     );
   } catch (err) {
-    return jsonRes({ error: err.message }, 500);
+    return jsonRes({ error: `네이버 API 호출 실패: ${err.message}` }, 500);
   }
 
   // ─── 3. 좌표 변환 + 거리 필터링 + 정렬 ─────────────────────────────────
   const seen = new Set();
   const documents = [];
+  let totalItems = 0;
 
   for (const page of pages) {
     for (const item of page.items ?? []) {
-      // HTML 태그 제거
+      totalItems++;
       const name = item.title.replace(/<[^>]+>/g, '');
       if (seen.has(name)) continue;
       seen.add(name);
 
-      // Naver mapx/mapy: WGS84 × 1e7
-      const placeLat = item.mapy / 1e7;
-      const placeLng = item.mapx / 1e7;
+      // Naver mapx/mapy: WGS84 × 1e7 (문자열로 반환됨)
+      const placeLat = Number(item.mapy) / 1e7;
+      const placeLng = Number(item.mapx) / 1e7;
+
+      // 한국 좌표 유효성 검사
+      if (placeLat < 33 || placeLat > 39 || placeLng < 124 || placeLng > 132) {
+        console.log('[naversearch] 유효하지 않은 좌표 무시:', name, placeLat, placeLng);
+        continue;
+      }
 
       const distance = Math.round(haversine(userLat, userLng, placeLat, placeLng));
+
       if (distance > radius) continue;
 
-      // 카테고리 정규화: "한식>순대국" → "음식점 > 한식 > 순대국"
       const categoryNorm = item.category
         ? `음식점 > ${item.category.replace(/>/g, ' > ')}`
         : '음식점';
@@ -118,8 +146,8 @@ export async function onRequestGet(context) {
         place_name: name,
         category_name: categoryNorm,
         distance: String(distance),
-        road_address_name: item.roadAddress,
-        address_name: item.address,
+        road_address_name: item.roadAddress || '',
+        address_name: item.address || '',
         phone: item.telephone || null,
         place_url: item.link || null,
         x: String(placeLng),
@@ -128,8 +156,11 @@ export async function onRequestGet(context) {
     }
   }
 
-  // 거리 오름차순 정렬
+  console.log(
+    `[naversearch] 쿼리: "${searchQuery}" | 전체 ${totalItems}개 → 반경 ${radius}m 내 ${documents.length}개`
+  );
+
   documents.sort((a, b) => parseInt(a.distance) - parseInt(b.distance));
 
-  return jsonRes({ documents });
+  return jsonRes({ documents, debug: { query: searchQuery, total: totalItems, inRadius: documents.length } });
 }

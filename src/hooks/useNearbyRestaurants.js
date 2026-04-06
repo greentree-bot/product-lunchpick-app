@@ -86,6 +86,13 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
       const places = data.documents ?? [];
       setRawList(places);
 
+      if (places.length === 0) {
+        const hint = data.debug
+          ? `"${data.debug.query}" 검색 결과 ${data.debug.total}개 중 ${data.debug.inRadius}개`
+          : '주변 식당을 찾지 못했습니다.';
+        setError(`반경 내 식당이 없습니다. (${hint})`);
+      }
+
       const filtered = places
         .map(toMenuCard)
         .filter((card) => !weekMenuSet.has(card.name));
