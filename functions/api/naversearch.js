@@ -148,6 +148,10 @@ export async function onRequestGet(context) {
       ? item.description.replace(/<[^>]+>/g, '').trim()
       : null;
 
+    // item.link = 업체 홈페이지/SNS → 네이버 통합검색 URL로 교체
+    const searchKeyword = item.roadAddress ? `${name} ${item.roadAddress}` : name;
+    const naverUrl = `https://search.naver.com/search.naver?query=${encodeURIComponent(searchKeyword)}`;
+
     documents.push({
       id: `naver-${item.mapx}-${item.mapy}`,
       place_name: name,
@@ -156,7 +160,7 @@ export async function onRequestGet(context) {
       road_address_name: item.roadAddress || '',
       address_name: item.address || '',
       phone: item.telephone || null,
-      place_url: item.link || null,
+      place_url: naverUrl,
       description: description || null,
       x: String(placeLng),
       y: String(placeLat),
