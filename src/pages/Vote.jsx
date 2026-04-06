@@ -27,6 +27,7 @@ export default function Vote() {
   const [showSettings, setShowSettings] = useState(false);
   const [editDeadline, setEditDeadline] = useState('');
   const [editMinVoters, setEditMinVoters] = useState(2);
+  const [selectedRestaurant, setSelectedRestaurant] = useState(null);
 
   useEffect(() => {
     if (!teamId || !memberName) navigate('/');
@@ -207,6 +208,101 @@ export default function Vote() {
         </div>
       )}
 
+      {/* 식당 상세 Bottom Sheet */}
+      {selectedRestaurant && (() => {
+        const r = selectedRestaurant;
+        const isOked  = myOkMenu === r.name;
+        const isPassed = myPassSet.has(r.name);
+        const okCount  = getOkCount(r.name);
+        const passCount = getPassCount(r.name);
+        return (
+          <div style={styles.sheetOverlay} onClick={() => setSelectedRestaurant(null)}>
+            <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+              {/* 핸들 */}
+              <div style={styles.sheetHandle} />
+
+              {/* 식당 이름 + 카테고리 */}
+              <h2 style={styles.sheetTitle}>{r.name}</h2>
+              <p style={styles.sheetCategory}>{r.category}</p>
+
+              {/* 기본 정보 */}
+              <div style={styles.sheetInfoBox}>
+                <div style={styles.sheetRow}>
+                  <span style={styles.sheetIcon}>📍</span>
+                  <span>{r.address || '주소 정보 없음'}</span>
+                </div>
+                {r.phone && (
+                  <div style={styles.sheetRow}>
+                    <span style={styles.sheetIcon}>📞</span>
+                    <a href={`tel:${r.phone}`} style={styles.sheetLink}>{r.phone}</a>
+                  </div>
+                )}
+                <div style={styles.sheetRow}>
+                  <span style={styles.sheetIcon}>📏</span>
+                  <span>{r.distance}m 거리</span>
+                </div>
+              </div>
+
+              {/* 한줄 소개 */}
+              {r.description && (
+                <p style={styles.sheetDesc}>💬 {r.description}</p>
+              )}
+
+              {/* 투표 현황 */}
+              {(okCount > 0 || passCount > 0) && (
+                <div style={styles.sheetVoteStatus}>
+                  {okCount > 0 && <span style={styles.sheetOkBadge}>👍 {okCount}명 괜찮아요</span>}
+                  {passCount > 0 && <span style={styles.sheetPassBadge}>👎 {passCount}명 패스</span>}
+                </div>
+              )}
+
+              {/* 네이버 리뷰 보기 */}
+              {r.url && (
+                <a
+                  href={r.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={styles.sheetNaverBtn}
+                >
+                  🔍 네이버에서 리뷰 보기
+                </a>
+              )}
+
+              {/* 투표 버튼 */}
+              {!isVotingClosed && (
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem' }}>
+                  {isOked ? (
+                    <span style={{ ...styles.badgeOk, flex: 1, textAlign: 'center', padding: '0.6rem' }}>✓ 괜찮아요 선택됨</span>
+                  ) : (
+                    <button
+                      style={{ ...styles.btnOk, flex: 1, opacity: myOkMenu ? 0.3 : 1, cursor: myOkMenu ? 'not-allowed' : 'pointer', padding: '0.65rem' }}
+                      onClick={() => { handleOk(r); setSelectedRestaurant(null); }}
+                      disabled={!!myOkMenu}
+                    >
+                      👍 괜찮아요
+                    </button>
+                  )}
+                  {!isOked && (
+                    isPassed ? (
+                      <span style={{ ...styles.badgePass, flex: 1, textAlign: 'center', padding: '0.6rem' }}>✗ 패스함</span>
+                    ) : (
+                      <button
+                        style={{ ...styles.btnPass, flex: 1, padding: '0.65rem' }}
+                        onClick={() => { handlePass(r); setSelectedRestaurant(null); }}
+                      >
+                        👎 패스
+                      </button>
+                    )
+                  )}
+                </div>
+              )}
+
+              <button style={styles.btnClose} onClick={() => setSelectedRestaurant(null)}>닫기</button>
+            </div>
+          </div>
+        );
+      })()}
+
       <main style={styles.main}>
         {/* 내 투표 현황 요약 */}
         {(myOkMenu || myPassSet.size > 0) && (
@@ -268,7 +364,10 @@ export default function Vote() {
                     alignItems: 'flex-start',
                   }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <strong style={{ fontSize: '1rem' }}>{r.name}</strong>
+                      <strong
+                        style={{ fontSize: '1rem', cursor: 'pointer', textDecoration: 'underline dotted', textUnderlineOffset: '3px' }}
+                        onClick={() => setSelectedRestaurant(r)}
+                      >{r.name}</strong>
                       <p style={styles.cardSub}>{r.category} · {r.distance}m</p>
                       {r.description && (
                         <p style={styles.cardDesc}>{r.description}</p>
@@ -455,6 +554,52 @@ const styles = {
   modal: {
     background: '#fff', borderRadius: '14px', padding: '1.5rem',
     width: '100%', maxWidth: '360px', boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+  },
+  sheetOverlay: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+    display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200,
+  },
+  sheet: {
+    background: '#fff', borderRadius: '20px 20px 0 0',
+    padding: '1rem 1.5rem 2rem', width: '100%', maxWidth: '600px',
+    boxShadow: '0 -4px 24px rgba(0,0,0,0.15)',
+    maxHeight: '85vh', overflowY: 'auto',
+  },
+  sheetHandle: {
+    width: '40px', height: '4px', borderRadius: '2px',
+    background: '#d1d5db', margin: '0 auto 1rem',
+  },
+  sheetTitle: { margin: '0 0 0.2rem', fontSize: '1.25rem', fontWeight: '700' },
+  sheetCategory: { margin: '0 0 1rem', fontSize: '0.85rem', color: '#ff6b35', fontWeight: '600' },
+  sheetInfoBox: {
+    background: '#f9fafb', borderRadius: '10px', padding: '0.75rem 1rem',
+    marginBottom: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem',
+  },
+  sheetRow: { display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.88rem', color: '#374151' },
+  sheetIcon: { flexShrink: 0 },
+  sheetLink: { color: '#2563eb', textDecoration: 'none' },
+  sheetDesc: {
+    fontSize: '0.85rem', color: '#6b7280', background: '#f3f4f6',
+    borderRadius: '8px', padding: '0.6rem 0.75rem', margin: '0 0 0.75rem',
+    lineHeight: 1.5,
+  },
+  sheetVoteStatus: {
+    display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap',
+  },
+  sheetOkBadge: {
+    fontSize: '0.85rem', color: '#15803d', background: '#dcfce7',
+    borderRadius: '999px', padding: '0.25rem 0.75rem', fontWeight: '600',
+  },
+  sheetPassBadge: {
+    fontSize: '0.85rem', color: '#b91c1c', background: '#fee2e2',
+    borderRadius: '999px', padding: '0.25rem 0.75rem', fontWeight: '600',
+  },
+  sheetNaverBtn: {
+    display: 'block', textAlign: 'center', width: '100%',
+    padding: '0.7rem', background: '#03c75a', color: '#fff',
+    border: 'none', borderRadius: '10px', fontSize: '0.95rem',
+    fontWeight: '700', textDecoration: 'none', marginBottom: '0.75rem',
+    boxSizing: 'border-box',
   },
   linkBox: {
     background: '#f5f5f5', borderRadius: '8px', padding: '0.75rem',
