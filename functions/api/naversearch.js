@@ -105,27 +105,35 @@ export async function onRequestGet(context) {
     'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
   };
 
+  // 일반 쿼리 8페이지 + 카테고리별 2페이지씩 → 충분한 후보 확보
   const baseQuery = area ? `${area} 음식점` : '음식점';
-  const searches = [
-    naverSearch(baseQuery, 1, naverHeaders),
-    naverSearch(baseQuery, 6, naverHeaders),
-    naverSearch(baseQuery, 11, naverHeaders),
-    naverSearch(baseQuery, 16, naverHeaders),
-    ...FOOD_CATS.map((cat) =>
-      naverSearch(area ? `${area} ${cat}` : cat, 1, naverHeaders)
-    ),
-  ];
+  const generalSearches = [1, 6, 11, 16, 21, 26, 31, 36].map((start) =>
+    naverSearch(baseQuery, start, naverHeaders)
+  );
+  const catSearches = FOOD_CATS.flatMap((cat) => [
+    naverSearch(area ? `${area} ${cat}` : cat, 1, naverHeaders),
+    naverSearch(area ? `${area} ${cat}` : cat, 6, naverHeaders),
+  ]);
 
-  const results = await Promise.all(searches);
-  const allItems = results.flat();
+  const results = await Promise.all([...generalSearches, ...catSearches]);
 
-  console.log(`[naversearch] 쿼리: "${baseQuery}" | 수집 ${allItems.length}개`);
+  // ─── 3. 네이버 랭크 부여 (sort=comment 순서 = 리뷰 많은 순) ─────────────
+  // 일반 검색 결과가 앞 순위, 카테고리 검색은 보완용
+  const rankedItems = [];
+  let rank = 0;
+  for (const pageItems of results) {
+    for (const item of pageItems) {
+      rankedItems.push({ item, rank: rank++ });
+    }
+  }
 
-  // ─── 3. 중복 제거 + 거리 필터 + 정렬 ───────────────────────────────────
+  console.log(`[naversearch] 쿼리: "${baseQuery}" | 수집 ${rankedItems.length}개`);
+
+  // ─── 4. 중복 제거 + 거리 필터 → 리뷰 순 정렬 ──────────────────────────
   const seen = new Set();
   const documents = [];
 
-  for (const item of allItems) {
+  for (const { item, rank: naverRank } of rankedItems) {
     const name = item.title.replace(/<[^>]+>/g, '');
     if (seen.has(name)) continue;
     seen.add(name);
@@ -133,7 +141,6 @@ export async function onRequestGet(context) {
     const placeLat = Number(item.mapy) / 1e7;
     const placeLng = Number(item.mapx) / 1e7;
 
-    // 한국 좌표 유효성
     if (placeLat < 33 || placeLat > 39 || placeLng < 124 || placeLng > 132) continue;
 
     const distance = Math.round(haversine(userLat, userLng, placeLat, placeLng));
@@ -143,12 +150,10 @@ export async function onRequestGet(context) {
       ? `음식점 > ${item.category.replace(/>/g, ' > ')}`
       : '음식점';
 
-    // description: 네이버 한줄 소개 (HTML 태그 제거)
     const description = item.description
       ? item.description.replace(/<[^>]+>/g, '').trim()
       : null;
 
-    // item.link = 업체 홈페이지/SNS → 네이버 통합검색 URL로 교체
     const searchKeyword = item.roadAddress ? `${name} ${item.roadAddress}` : name;
     const naverUrl = `https://search.naver.com/search.naver?query=${encodeURIComponent(searchKeyword)}`;
 
@@ -164,10 +169,12 @@ export async function onRequestGet(context) {
       description: description || null,
       x: String(placeLng),
       y: String(placeLat),
+      naverRank,
     });
   }
 
-  documents.sort((a, b) => parseInt(a.distance) - parseInt(b.distance));
+  // 네이버 리뷰 순(naverRank 오름차순)으로 정렬 → 상위 20개
+  documents.sort((a, b) => a.naverRank - b.naverRank);
   const top20 = documents.slice(0, maxResults);
 
   console.log(`[naversearch] 반경 ${radius}m 내 ${documents.length}개 → ${top20.length}개 반환`);
