@@ -79,15 +79,16 @@ export async function onRequestGet(context) {
     if (nomRes.ok) {
       const nomData = await nomRes.json();
       const addr = nomData.address ?? {};
-      area =
-        addr.quarter ||
-        addr.neighbourhood ||
-        addr.suburb ||
-        addr.city_district ||
-        addr.county ||
-        addr.city ||
-        '';
-      console.log('[naversearch] 역지오코딩:', area, '| 전체 주소:', nomData.display_name);
+
+      // 법정동(suburb)이 네이버 주소 매칭에 유리 → suburb 우선
+      // 행정동(quarter/neighbourhood)은 "역삼1동" 같은 번호 포함 → 번호 제거
+      const stripNum = (s) => s.replace(/^(.*\D)\d+(동)$/, '$1$2');
+      const suburb = addr.suburb || '';
+      const quarter = stripNum(addr.quarter || addr.neighbourhood || '');
+      const raw = suburb || quarter || addr.city_district || addr.county || addr.city || '';
+      area = stripNum(raw);
+
+      console.log('[naversearch] 역지오코딩:', area, '| raw addr:', JSON.stringify(addr));
     }
   } catch (e) {
     console.log('[naversearch] Nominatim 실패:', e.message);
