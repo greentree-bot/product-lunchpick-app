@@ -269,12 +269,7 @@ export default function Vote() {
                   }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong style={{ fontSize: '1rem' }}>{r.name}</strong>
-                      <p style={styles.cardSub}>
-                        {r.category} · {r.distance}m
-                        {r.starScore && (
-                          <span style={styles.starScore}> · ⭐ {r.starScore}</span>
-                        )}
-                      </p>
+                      <p style={styles.cardSub}>{r.category} · {r.distance}m</p>
 
                       {(okVoters.length > 0 || passVoters.length > 0) && (
                         <div style={styles.voterRow}>
@@ -383,7 +378,6 @@ const styles = {
     background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
   },
   cardSub: { margin: '0.2rem 0 0', fontSize: '0.85rem', color: '#888' },
-  starScore: { color: '#f59e0b', fontWeight: '600' },
   voterRow: {
     display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.45rem',
   },
