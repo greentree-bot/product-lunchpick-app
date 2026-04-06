@@ -69,7 +69,32 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 300) {
       url: place.place_url,
       lat: Number(place.y),
       lng: Number(place.x),
+      // 상세 정보 (fetchPlaceDetails 후 채워짐)
+      starScore: null,
+      reviewCount: null,
+      menus: [],
     };
+  };
+
+  // ─── 4. 장소 상세 정보 병렬 조회 ──────────────────────────────────────────
+  const fetchPlaceDetails = async (cards) => {
+    const results = await Promise.allSettled(
+      cards.map((card) =>
+        fetch(`/api/kakaoplace?id=${card.id}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null)
+      )
+    );
+    return cards.map((card, i) => {
+      const detail = results[i].status === 'fulfilled' ? results[i].value : null;
+      if (!detail || detail.error) return card;
+      return {
+        ...card,
+        starScore: detail.starScore,
+        reviewCount: detail.reviewCount,
+        menus: detail.menus ?? [],
+      };
+    });
   };
 
   // ─── 3. /api/kakaomap 호출 ────────────────────────────────────────────────
@@ -106,8 +131,12 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 300) {
         .map(toMenuCard)
         .filter((card) => !weekMenuSet.has(card.name));
 
-      console.log('[useNearbyRestaurants] 필터 후 장소 수:', filtered.length);
+      // 기본 카드 먼저 표시
       setRestaurants(filtered);
+
+      // 상세 정보(평점·후기·메뉴) 병렬 로드 후 업데이트
+      const detailed = await fetchPlaceDetails(filtered);
+      setRestaurants(detailed);
 
     } catch (err) {
       console.error('[useNearbyRestaurants] catch:', err.message);
