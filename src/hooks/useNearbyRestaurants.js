@@ -41,7 +41,7 @@ function toMenuCard(place) {
  * @param {Set<string>} weekMenuSet - useVotes에서 받은 이번 주 메뉴명 Set
  * @param {number} radius - 검색 반경(m), 기본 300
  */
-export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 300) {
+export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
   const [restaurants, setRestaurants] = useState([]);
   const [rawList, setRawList] = useState([]);
   const [location, setLocation] = useState(null);
