@@ -76,7 +76,7 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
     setError(null);
     try {
       const params = new URLSearchParams({ lat: coords.lat, lng: coords.lng, radius });
-      const res = await fetch(`/api/kakaomap?${params}`);
+      const res = await fetch(`/api/naversearch?${params}`);
       const data = await res.json();
 
       if (!res.ok) {
