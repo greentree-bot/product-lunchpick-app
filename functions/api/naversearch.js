@@ -2,9 +2,11 @@
  * 네이버 지역 검색 API 프록시
  * GET /api/naversearch?lat={lat}&lng={lng}&radius={radius}
  *
- * - Nominatim 역지오코딩으로 동 이름 추출
- * - "동 음식점" + "동 한식/중식/일식/양식/분식" 병렬 검색 → 최대 약 55개 후보
- * - 1km 내 최대 20개 거리순 반환
+ * 전략:
+ *  1. Nominatim 역지오코딩 → 동(fine) + 구(broad) 동시 추출
+ *  2. 구 레벨 검색(후보 많음) + 동 레벨 검색(정확도) 병렬 실행
+ *  3. 1km 내 필터 → 부족 시 2km, 3km 자동 확장
+ *  4. naverRank(리뷰 많은 순) 정렬 → 상위 20개 반환
  */
 
 function haversine(lat1, lng1, lat2, lng2) {
@@ -64,11 +66,13 @@ export async function onRequestGet(context) {
   const userLat = parseFloat(lat);
   const userLng = parseFloat(lng);
 
-  // ─── 1. Nominatim 역지오코딩 ────────────────────────────────────────────
-  let area = '';
+  // ─── 1. Nominatim 역지오코딩 → 동(fine) + 구(broad) ────────────────────
+  let areaFine = '';   // 동 레벨: 역삼동
+  let areaBroad = '';  // 구 레벨: 강남구
+
   try {
     const nomRes = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=15&addressdetails=1`,
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1`,
       {
         headers: {
           'User-Agent': 'LunchPick/1.0 (lunchpick.pages.dev)',
@@ -80,46 +84,53 @@ export async function onRequestGet(context) {
       const nomData = await nomRes.json();
       const addr = nomData.address ?? {};
 
-      // 법정동(suburb)이 네이버 주소 매칭에 유리 → suburb 우선
-      // 행정동(quarter/neighbourhood)은 "역삼1동" 같은 번호 포함 → 번호 제거
-      const stripNum = (s) => s.replace(/^(.*\D)\d+(동)$/, '$1$2');
-      const suburb = addr.suburb || '';
-      const quarter = stripNum(addr.quarter || addr.neighbourhood || '');
-      const raw = suburb || quarter || addr.city_district || addr.county || addr.city || '';
-      area = stripNum(raw);
+      // 행정동 번호 제거: 역삼1동 → 역삼동
+      const stripNum = (s) => (s || '').replace(/^(.*\D)\d+(동)$/, '$1$2');
 
-      console.log('[naversearch] 역지오코딩:', area, '| raw addr:', JSON.stringify(addr));
+      // 동 레벨: 법정동(suburb) 우선, 없으면 행정동(quarter/neighbourhood)
+      areaFine = stripNum(addr.suburb || addr.quarter || addr.neighbourhood || '');
+
+      // 구 레벨: city_district (서울/부산 등) 또는 county (경기도 시군)
+      areaBroad = addr.city_district || addr.county || addr.town || '';
+
+      console.log('[naversearch] 역지오코딩 → 동:', areaFine, '| 구:', areaBroad, '| raw:', JSON.stringify(addr));
     }
   } catch (e) {
     console.log('[naversearch] Nominatim 실패:', e.message);
   }
 
-  if (!area) {
-    console.log('[naversearch] 동 이름 없음, 일반 쿼리 사용');
-  }
-
-  // ─── 2. 병렬 검색 쿼리 구성 ─────────────────────────────────────────────
-  // "동 음식점" 2페이지 + 카테고리별 각 1페이지 = 10+5 = 최대 55개 후보
+  // ─── 2. 병렬 검색: 구 레벨(후보 많음) + 동 레벨(정확도) ─────────────────
   const FOOD_CATS = ['한식', '중식', '일식', '양식', '분식'];
   const naverHeaders = {
     'X-Naver-Client-Id': NAVER_CLIENT_ID,
     'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
   };
 
-  // 일반 쿼리 8페이지 + 카테고리별 2페이지씩 → 충분한 후보 확보
-  const baseQuery = area ? `${area} 음식점` : '음식점';
-  const generalSearches = [1, 6, 11, 16, 21, 26, 31, 36].map((start) =>
-    naverSearch(baseQuery, start, naverHeaders)
-  );
-  const catSearches = FOOD_CATS.flatMap((cat) => [
-    naverSearch(area ? `${area} ${cat}` : cat, 1, naverHeaders),
-    naverSearch(area ? `${area} ${cat}` : cat, 6, naverHeaders),
-  ]);
+  const searches = [];
 
-  const results = await Promise.all([...generalSearches, ...catSearches]);
+  // 구 레벨 검색: 4페이지 일반 + 5카테고리×2페이지 = 14 queries
+  if (areaBroad) {
+    [1, 6, 11, 16].forEach((s) => searches.push(naverSearch(`${areaBroad} 음식점`, s, naverHeaders)));
+    FOOD_CATS.forEach((cat) => {
+      searches.push(naverSearch(`${areaBroad} ${cat}`, 1, naverHeaders));
+      searches.push(naverSearch(`${areaBroad} ${cat}`, 6, naverHeaders));
+    });
+  }
+
+  // 동 레벨 검색: 2페이지 일반 + 5카테고리×1페이지 = 7 queries
+  if (areaFine && areaFine !== areaBroad) {
+    [1, 6].forEach((s) => searches.push(naverSearch(`${areaFine} 음식점`, s, naverHeaders)));
+    FOOD_CATS.forEach((cat) => searches.push(naverSearch(`${areaFine} ${cat}`, 1, naverHeaders)));
+  }
+
+  // 둘 다 없으면 fallback
+  if (searches.length === 0) {
+    [1, 6, 11, 16].forEach((s) => searches.push(naverSearch('음식점', s, naverHeaders)));
+  }
+
+  const results = await Promise.all(searches);
 
   // ─── 3. 네이버 랭크 부여 (sort=comment 순서 = 리뷰 많은 순) ─────────────
-  // 일반 검색 결과가 앞 순위, 카테고리 검색은 보완용
   const rankedItems = [];
   let rank = 0;
   for (const pageItems of results) {
@@ -128,11 +139,11 @@ export async function onRequestGet(context) {
     }
   }
 
-  console.log(`[naversearch] 쿼리: "${baseQuery}" | 수집 ${rankedItems.length}개`);
+  console.log(`[naversearch] 구:"${areaBroad}" 동:"${areaFine}" | 수집 ${rankedItems.length}개`);
 
-  // ─── 4. 중복 제거 + 거리 필터 → 리뷰 순 정렬 ──────────────────────────
+  // ─── 4. 중복 제거 + 거리 계산 → 전체 후보 목록 생성 ────────────────────
   const seen = new Set();
-  const documents = [];
+  const allDocs = [];
 
   for (const { item, rank: naverRank } of rankedItems) {
     const name = item.title.replace(/<[^>]+>/g, '');
@@ -142,10 +153,12 @@ export async function onRequestGet(context) {
     const placeLat = Number(item.mapy) / 1e7;
     const placeLng = Number(item.mapx) / 1e7;
 
+    // 한국 영역 좌표 검증
     if (placeLat < 33 || placeLat > 39 || placeLng < 124 || placeLng > 132) continue;
+    // 좌표 없는 항목 제외
+    if (placeLat === 0 || placeLng === 0) continue;
 
     const distance = Math.round(haversine(userLat, userLng, placeLat, placeLng));
-    if (distance > radius) continue;
 
     const categoryNorm = item.category
       ? `음식점 > ${item.category.replace(/>/g, ' > ')}`
@@ -158,11 +171,11 @@ export async function onRequestGet(context) {
     const searchKeyword = item.roadAddress ? `${name} ${item.roadAddress}` : name;
     const naverUrl = `https://search.naver.com/search.naver?query=${encodeURIComponent(searchKeyword)}`;
 
-    documents.push({
+    allDocs.push({
       id: `naver-${item.mapx}-${item.mapy}`,
       place_name: name,
       category_name: categoryNorm,
-      distance: String(distance),
+      distance,
       road_address_name: item.roadAddress || '',
       address_name: item.address || '',
       phone: item.telephone || null,
@@ -174,11 +187,25 @@ export async function onRequestGet(context) {
     });
   }
 
-  // 네이버 리뷰 순(naverRank 오름차순)으로 정렬 → 상위 20개
+  // ─── 5. 반경 내 필터 → 부족 시 자동 확장 (1km → 2km → 3km) ────────────
+  const EXPAND_STEPS = [radius, 2000, 3000];
+  let documents = [];
+  let usedRadius = radius;
+
+  for (const r of EXPAND_STEPS) {
+    documents = allDocs.filter((d) => d.distance <= r);
+    usedRadius = r;
+    if (documents.length >= 5) break;
+  }
+
+  // naverRank(리뷰 많은 순) 정렬 → 상위 20개
   documents.sort((a, b) => a.naverRank - b.naverRank);
   const top20 = documents.slice(0, maxResults);
 
-  console.log(`[naversearch] 반경 ${radius}m 내 ${documents.length}개 → ${top20.length}개 반환`);
+  // distance를 문자열로 변환 (기존 클라이언트 호환)
+  const top20Str = top20.map((d) => ({ ...d, distance: String(d.distance) }));
 
-  return jsonRes({ documents: top20 });
+  console.log(`[naversearch] 반경 ${usedRadius}m 내 ${documents.length}개 → ${top20Str.length}개 반환`);
+
+  return jsonRes({ documents: top20Str });
 }
