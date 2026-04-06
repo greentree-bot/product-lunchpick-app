@@ -239,6 +239,11 @@ export default function Vote() {
                 const okCount    = getOkCount(r.name);
                 const passCount  = getPassCount(r.name);
 
+                // 이 식당에 투표한 사람들 (오늘 기준, 중복 제거)
+                const todayVotes = votes.filter(v => v.voted_at?.slice(0, 10) === today);
+                const okVoters  = [...new Set(todayVotes.filter(v => v.menu_name === r.name && v.action === 'ok').map(v => v.voter_name))];
+                const passVoters = [...new Set(todayVotes.filter(v => v.menu_name === r.name && v.action === 'pass').map(v => v.voter_name))];
+
                 return (
                   <li key={r.id} style={{
                     ...styles.card,
@@ -246,10 +251,21 @@ export default function Vote() {
                           : isPassed ? '1px solid #e5e7eb'
                           : '1px solid #eee',
                     opacity: isPassed && !isOked ? 0.6 : 1,
+                    alignItems: 'flex-start',
                   }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong style={{ fontSize: '1rem' }}>{r.name}</strong>
                       <p style={styles.cardSub}>{r.category} · {r.distance}m</p>
+                      {(okVoters.length > 0 || passVoters.length > 0) && (
+                        <div style={styles.voterRow}>
+                          {okVoters.map(name => (
+                            <span key={`ok-${name}`} style={styles.chipOk}>{name}</span>
+                          ))}
+                          {passVoters.map(name => (
+                            <span key={`pass-${name}`} style={styles.chipPass}>{name}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
@@ -335,6 +351,17 @@ const styles = {
     background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
   },
   cardSub: { margin: '0.2rem 0 0', fontSize: '0.85rem', color: '#888' },
+  voterRow: {
+    display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.45rem',
+  },
+  chipOk: {
+    fontSize: '0.72rem', fontWeight: '600', color: '#15803d',
+    background: '#dcfce7', borderRadius: '999px', padding: '0.15rem 0.55rem',
+  },
+  chipPass: {
+    fontSize: '0.72rem', fontWeight: '600', color: '#b91c1c',
+    background: '#fee2e2', borderRadius: '999px', padding: '0.15rem 0.55rem',
+  },
   countBadge: { fontSize: '0.85rem', color: '#555', minWidth: '36px' },
   passBadge: { fontSize: '0.85rem', color: '#ef4444', minWidth: '36px' },
   badgeOk: {

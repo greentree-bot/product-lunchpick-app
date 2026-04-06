@@ -20,6 +20,8 @@ export default function Result() {
   const ranked = Object.entries(okCountByMenu).sort(([, a], [, b]) => b - a);
   const topMenu = ranked[0]?.[0];
   const totalVoters = new Set(votes.map((v) => v.voter_name)).size;
+  const today = new Date().toISOString().slice(0, 10);
+  const todayVotes = votes.filter(v => v.voted_at?.slice(0, 10) === today);
   const minVoters = settings.min_voters ?? 2;
   const canConfirm = isVotingClosed && totalVoters >= minVoters;
 
@@ -74,20 +76,38 @@ export default function Result() {
           <section style={{ marginBottom: '2rem' }}>
             <h2 style={styles.sectionTitle}>메뉴 순위</h2>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {ranked.map(([menu, count], i) => (
-                <li key={menu} style={{ ...styles.card, background: i === 0 ? '#fff7ed' : '#fff' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <span style={styles.rank}>{i + 1}</span>
-                    <strong>{menu}</strong>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-                    <span style={styles.okCount}>👍 {count}</span>
-                    {(passCountByMenu[menu] ?? 0) > 0 && (
-                      <span style={styles.passCount}>👎 {passCountByMenu[menu]}</span>
-                    )}
-                  </div>
-                </li>
-              ))}
+              {ranked.map(([menu, count], i) => {
+                const okVoters   = [...new Set(todayVotes.filter(v => v.menu_name === menu && v.action === 'ok').map(v => v.voter_name))];
+                const passVoters = [...new Set(todayVotes.filter(v => v.menu_name === menu && v.action === 'pass').map(v => v.voter_name))];
+                return (
+                  <li key={menu} style={{ ...styles.card, background: i === 0 ? '#fff7ed' : '#fff', alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
+                      <span style={styles.rank}>{i + 1}</span>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong>{menu}</strong>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                          <span style={styles.okCount}>👍 {count}</span>
+                          {(passCountByMenu[menu] ?? 0) > 0 && (
+                            <span style={styles.passCount}>👎 {passCountByMenu[menu]}</span>
+                          )}
+                        </div>
+                      </div>
+                      {(okVoters.length > 0 || passVoters.length > 0) && (
+                        <div style={styles.voterRow}>
+                          {okVoters.map(name => (
+                            <span key={`ok-${name}`} style={styles.chipOk}>{name}</span>
+                          ))}
+                          {passVoters.map(name => (
+                            <span key={`pass-${name}`} style={styles.chipPass}>{name}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
 
             {topMenu && (
@@ -164,6 +184,17 @@ const styles = {
   },
   okCount: { fontSize: '0.95rem', color: '#555' },
   passCount: { fontSize: '0.95rem', color: '#ef4444' },
+  voterRow: {
+    display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.45rem',
+  },
+  chipOk: {
+    fontSize: '0.72rem', fontWeight: '600', color: '#15803d',
+    background: '#dcfce7', borderRadius: '999px', padding: '0.15rem 0.55rem',
+  },
+  chipPass: {
+    fontSize: '0.72rem', fontWeight: '600', color: '#b91c1c',
+    background: '#fee2e2', borderRadius: '999px', padding: '0.15rem 0.55rem',
+  },
   btnPrimary: {
     padding: '0.75rem 1.5rem', fontSize: '1rem', background: '#ff6b35',
     color: '#fff', border: 'none', borderRadius: '8px',
