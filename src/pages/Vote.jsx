@@ -344,7 +344,7 @@ const styles = {
     fontSize: '0.85rem',
   },
   summaryOk: { color: '#22c55e', fontWeight: 'bold' },
-  summaryPass: { color: '#9ca3af' },
+  summaryPass: { color: '#ef4444', fontWeight: 'bold' },
   card: {
     borderRadius: '10px', padding: '0.9rem 1rem', marginBottom: '0.75rem',
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -363,7 +363,7 @@ const styles = {
     background: '#fee2e2', borderRadius: '999px', padding: '0.15rem 0.55rem',
   },
   countBadge: { fontSize: '0.85rem', color: '#555', minWidth: '36px' },
-  passBadge: { fontSize: '0.85rem', color: '#ef4444', minWidth: '36px' },
+  passBadge: { fontSize: '0.85rem', color: '#ef4444', minWidth: '36px', fontWeight: 'bold' },
   badgeOk: {
     fontSize: '0.8rem', color: '#22c55e', fontWeight: 'bold',
     background: '#f0fdf4', padding: '0.25rem 0.5rem', borderRadius: '6px',
