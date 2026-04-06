@@ -362,7 +362,7 @@ const styles = {
     fontSize: '0.72rem', fontWeight: '600', color: '#b91c1c',
     background: '#fee2e2', borderRadius: '999px', padding: '0.15rem 0.55rem',
   },
-  countBadge: { fontSize: '0.85rem', color: '#555', minWidth: '36px' },
+  countBadge: { fontSize: '0.85rem', color: '#16a34a', minWidth: '36px', fontWeight: 'bold' },
   passBadge: { fontSize: '0.85rem', color: '#ef4444', minWidth: '36px', fontWeight: 'bold' },
   badgeOk: {
     fontSize: '0.8rem', color: '#22c55e', fontWeight: 'bold',
