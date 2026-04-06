@@ -270,6 +270,9 @@ export default function Vote() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong style={{ fontSize: '1rem' }}>{r.name}</strong>
                       <p style={styles.cardSub}>{r.category} · {r.distance}m</p>
+                      {r.description && (
+                        <p style={styles.cardDesc}>{r.description}</p>
+                      )}
 
                       {(okVoters.length > 0 || passVoters.length > 0) && (
                         <div style={styles.voterRow}>
@@ -378,6 +381,7 @@ const styles = {
     background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
   },
   cardSub: { margin: '0.2rem 0 0', fontSize: '0.85rem', color: '#888' },
+  cardDesc: { margin: '0.2rem 0 0', fontSize: '0.78rem', color: '#6b7280', lineHeight: 1.4 },
   voterRow: {
     display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.45rem',
   },
