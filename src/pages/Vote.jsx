@@ -271,28 +271,6 @@ export default function Vote() {
                       <strong style={{ fontSize: '1rem' }}>{r.name}</strong>
                       <p style={styles.cardSub}>{r.category} · {r.distance}m</p>
 
-                      {/* 평점 · 후기 */}
-                      {(r.starScore || r.reviewCount > 0) && (
-                        <p style={styles.cardMeta}>
-                          {r.starScore && <span style={styles.star}>⭐ {r.starScore}</span>}
-                          {r.reviewCount > 0 && (
-                            <span style={styles.review}>후기 {r.reviewCount.toLocaleString()}개</span>
-                          )}
-                        </p>
-                      )}
-
-                      {/* 대표 메뉴 */}
-                      {r.menus?.length > 0 && (
-                        <p style={styles.menuList}>
-                          {r.menus.map((m, i) => (
-                            <span key={i} style={styles.menuItem}>
-                              {m.name}{m.price ? ` ${m.price}` : ''}
-                              {i < r.menus.length - 1 ? ' · ' : ''}
-                            </span>
-                          ))}
-                        </p>
-                      )}
-
                       {(okVoters.length > 0 || passVoters.length > 0) && (
                         <div style={styles.voterRow}>
                           {okVoters.map(name => (
@@ -400,14 +378,6 @@ const styles = {
     background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
   },
   cardSub: { margin: '0.2rem 0 0', fontSize: '0.85rem', color: '#888' },
-  cardMeta: {
-    margin: '0.25rem 0 0', fontSize: '0.8rem', color: '#555',
-    display: 'flex', gap: '0.5rem', alignItems: 'center',
-  },
-  star: { color: '#f59e0b', fontWeight: '600' },
-  review: { color: '#6b7280' },
-  menuList: { margin: '0.25rem 0 0', fontSize: '0.78rem', color: '#374151' },
-  menuItem: {},
   voterRow: {
     display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.45rem',
   },

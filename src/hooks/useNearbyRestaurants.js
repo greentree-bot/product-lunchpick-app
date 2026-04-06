@@ -31,30 +31,7 @@ function toMenuCard(place) {
     url: place.place_url,
     lat: Number(place.y),
     lng: Number(place.x),
-    starScore: null,
-    reviewCount: null,
-    menus: [],
   };
-}
-
-async function fetchPlaceDetails(cards) {
-  const results = await Promise.allSettled(
-    cards.map((card) =>
-      fetch(`/api/kakaoplace?id=${card.id}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null)
-    )
-  );
-  return cards.map((card, i) => {
-    const detail = results[i].status === 'fulfilled' ? results[i].value : null;
-    if (!detail || detail.error) return card;
-    return {
-      ...card,
-      starScore: detail.starScore,
-      reviewCount: detail.reviewCount,
-      menus: detail.menus ?? [],
-    };
-  });
 }
 
 // ─── 훅 ──────────────────────────────────────────────────────────────────────
@@ -114,9 +91,6 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 300) {
         .filter((card) => !weekMenuSet.has(card.name));
 
       setRestaurants(filtered);
-
-      const detailed = await fetchPlaceDetails(filtered);
-      setRestaurants(detailed);
 
     } catch (err) {
       console.error('[useNearbyRestaurants]', err.message);
