@@ -229,11 +229,25 @@ export default function Vote() {
         {locationError && <p style={{ color: 'red', margin: '0.5rem 0' }}>오류: {locationError}</p>}
         {loadingVotes && <p style={{ color: '#999' }}>투표 현황 불러오는 중...</p>}
 
-        {restaurants.length > 0 && (
+        {restaurants.length > 0 && (() => {
+          const CATEGORY_ORDER = ['한식', '중식', '일식', '양식', '분식', '기타'];
+          const CATEGORY_EMOJI = { 한식: '🍚', 중식: '🥢', 일식: '🍣', 양식: '🍝', 분식: '🥙', 기타: '🍴' };
+          const grouped = CATEGORY_ORDER.reduce((acc, cat) => {
+            const items = restaurants.filter((r) => r.mainCategory === cat);
+            if (items.length) acc.push({ cat, items });
+            return acc;
+          }, []);
+
+          return (
           <section style={{ marginTop: '1.5rem' }}>
             <h2 style={styles.sectionTitle}>주변 식당 {restaurants.length}곳</h2>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {restaurants.map((r) => {
+            {grouped.map(({ cat, items }) => (
+              <div key={cat} style={{ marginBottom: '1.25rem' }}>
+                <div style={styles.catHeader}>
+                  {CATEGORY_EMOJI[cat]} {cat} <span style={styles.catCount}>{items.length}</span>
+                </div>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                  {items.map((r) => {
                 const isOked     = myOkMenu === r.name;
                 const isPassed   = myPassSet.has(r.name);
                 const okCount    = getOkCount(r.name);
@@ -309,10 +323,13 @@ export default function Vote() {
                     </div>
                   </li>
                 );
-              })}
-            </ul>
+                  })}
+                </ul>
+              </div>
+            ))}
           </section>
-        )}
+          );
+        })()}
       </main>
     </div>
   );
@@ -337,6 +354,15 @@ const styles = {
   },
   main: { padding: '1.5rem', maxWidth: '720px', margin: '0 auto' },
   sectionTitle: { fontSize: '1rem', color: '#444', margin: '0 0 0.75rem' },
+  catHeader: {
+    fontSize: '0.9rem', fontWeight: '700', color: '#374151',
+    padding: '0.4rem 0.75rem', marginBottom: '0.5rem',
+    background: '#f3f4f6', borderRadius: '8px',
+    display: 'flex', alignItems: 'center', gap: '0.4rem',
+  },
+  catCount: {
+    fontSize: '0.78rem', color: '#6b7280', fontWeight: '400',
+  },
   summaryBox: {
     display: 'flex', gap: '0.75rem', flexWrap: 'wrap',
     marginBottom: '1rem', padding: '0.6rem 0.9rem',

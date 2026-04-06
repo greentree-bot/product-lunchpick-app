@@ -39,18 +39,38 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 300) {
     });
   }, []);
 
-  // ─── 2. 카카오 결과 → 메뉴 카드 변환 ────────────────────────────────────
-  const toMenuCard = (place) => ({
-    id: place.id,
-    name: place.place_name,
-    category: place.category_name?.split(' > ').pop() ?? '',
-    distance: Number(place.distance),
-    address: place.road_address_name || place.address_name,
-    phone: place.phone || null,
-    url: place.place_url,
-    lat: Number(place.y),
-    lng: Number(place.x),
-  });
+  // ─── 2. 카테고리 분류 ────────────────────────────────────────────────────
+  const CATEGORY_KEYWORDS = {
+    한식: ['한식', '국밥', '해장국', '삼겹살', '갈비', '불고기', '순대', '보쌈', '족발', '찜', '탕', '찌개', '설렁탕', '육류', '곱창', '막창', '백반', '냉면'],
+    중식: ['중식', '중국식', '짜장', '짬뽕'],
+    일식: ['일식', '초밥', '롤', '돈까스', '회,생선요리', '라멘', '우동', '소바', '덮밥', '일본식'],
+    양식: ['양식', '스테이크', '파스타', '피자', '샌드위치', '햄버거', '패스트푸드', '브런치', '멕시칸', '인도음식'],
+    분식: ['분식', '떡볶이', '라면', '김밥', '순대'],
+  };
+
+  const getMainCategory = (fullCategory = '') => {
+    for (const [main, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+      if (keywords.some((kw) => fullCategory.includes(kw))) return main;
+    }
+    return '기타';
+  };
+
+  // ─── 3. 카카오 결과 → 메뉴 카드 변환 ────────────────────────────────────
+  const toMenuCard = (place) => {
+    const fullCategory = place.category_name ?? '';
+    return {
+      id: place.id,
+      name: place.place_name,
+      category: fullCategory.split(' > ').pop() ?? '',
+      mainCategory: getMainCategory(fullCategory),
+      distance: Number(place.distance),
+      address: place.road_address_name || place.address_name,
+      phone: place.phone || null,
+      url: place.place_url,
+      lat: Number(place.y),
+      lng: Number(place.x),
+    };
+  };
 
   // ─── 3. /api/kakaomap 호출 ────────────────────────────────────────────────
   const searchNearby = useCallback(async (coords) => {
