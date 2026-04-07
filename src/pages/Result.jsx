@@ -123,6 +123,28 @@ export default function Result() {
                       : `참여 인원 부족 (${totalVoters}/${minVoters}명)`}
                   </button>
                 )}
+
+                <div style={styles.menuPreviewCard}>
+                  <p style={styles.menuPreviewTitle}>🍴 {topMenu} 메뉴</p>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <a
+                      href={`https://map.naver.com/v5/search/${encodeURIComponent(topMenu)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={styles.menuBtn}
+                    >
+                      네이버 지도에서 메뉴 보기
+                    </a>
+                    <a
+                      href={`https://search.naver.com/search.naver?query=${encodeURIComponent(topMenu + ' 메뉴')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ ...styles.menuBtn, ...styles.menuBtnGhost }}
+                    >
+                      네이버 검색
+                    </a>
+                  </div>
+                </div>
               </div>
             )}
           </section>
@@ -135,7 +157,17 @@ export default function Result() {
             <h2 style={styles.sectionTitle}>오늘 먹은 메뉴</h2>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               {todayHistory.map((h) => (
-                <li key={h.id} style={styles.historyItem}>🍱 {h.menu_name}</li>
+                <li key={h.id} style={styles.historyItem}>
+                  <span>🍱 {h.menu_name}</span>
+                  <a
+                    href={`https://map.naver.com/v5/search/${encodeURIComponent(h.menu_name)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={styles.historyLink}
+                  >
+                    메뉴 보기
+                  </a>
+                </li>
               ))}
             </ul>
           </section>
@@ -210,5 +242,27 @@ const styles = {
   historyItem: {
     padding: '0.6rem 1rem', borderRadius: '8px', background: '#f9fafb',
     marginBottom: '0.5rem', fontSize: '0.95rem',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+  },
+  historyLink: {
+    fontSize: '0.8rem', color: '#16a34a', textDecoration: 'none',
+    border: '1px solid #86efac', borderRadius: '5px', padding: '0.15rem 0.5rem',
+    flexShrink: 0,
+  },
+  menuPreviewCard: {
+    marginTop: '1rem', padding: '1rem', borderRadius: '10px',
+    background: '#f0fdf4', border: '1px solid #bbf7d0',
+  },
+  menuPreviewTitle: {
+    margin: '0 0 0.65rem', fontSize: '0.95rem', fontWeight: 'bold', color: '#15803d',
+  },
+  menuBtn: {
+    display: 'inline-block', padding: '0.45rem 0.9rem',
+    background: '#16a34a', color: '#fff', borderRadius: '7px',
+    fontSize: '0.85rem', fontWeight: '600', textDecoration: 'none',
+  },
+  menuBtnGhost: {
+    background: 'transparent', color: '#16a34a',
+    border: '1px solid #16a34a',
   },
 };
