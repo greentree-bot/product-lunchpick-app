@@ -14,12 +14,13 @@ export function useTeam() {
     setLoading(true);
     setError(null);
     try {
-      // 생성 시각 + 10분을 기본 마감으로 설정 (ISO datetime 형식)
+      // 생성 시각 + 10분을 기본 마감으로 설정 (로컬 시간 문자열)
+      // toISOString()은 UTC 기준이므로 timezone 오차 발생 → 로컬 시간으로 직접 생성
       const deadline = (() => {
         const d = new Date();
         d.setMinutes(d.getMinutes() + 10);
-        // "YYYY-MM-DDTHH:MM" — 날짜 포함으로 다음날 오작동 방지
-        return d.toISOString().slice(0, 16);
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
       })();
 
       // 1. teams 테이블에 팀 생성
