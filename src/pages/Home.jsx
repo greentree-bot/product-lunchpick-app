@@ -58,18 +58,6 @@ export default function Home() {
     }
   };
 
-  // ─── 공통 배경 wrapper ──────────────────────────────────────────────────
-  const Page = ({ children }) => (
-    <div style={s.page}>
-      {/* 장식 글로우 — pointer-events 없음, 레이아웃에 영향 없음 */}
-      <div style={s.glowOrange} aria-hidden="true" />
-      <div style={s.glowPurple} aria-hidden="true" />
-      <div style={s.scroll}>
-        <div style={s.inner}>{children}</div>
-      </div>
-    </div>
-  );
-
   // ─── 팀 생성 완료 ────────────────────────────────────────────────────────
   if (inviteLink) {
     return (
@@ -209,6 +197,19 @@ export default function Home() {
         input { caret-color: #ff6b35; }
       `}</style>
     </Page>
+  );
+}
+
+// ─── 공통 배경 wrapper (Home 외부에 정의 — 내부 정의 시 매 렌더마다 unmount/remount 발생) ───
+function Page({ children }) {
+  return (
+    <div style={s.page}>
+      <div style={s.glowOrange} aria-hidden="true" />
+      <div style={s.glowPurple} aria-hidden="true" />
+      <div style={s.scroll}>
+        <div style={s.inner}>{children}</div>
+      </div>
+    </div>
   );
 }
 
