@@ -192,6 +192,23 @@ export function useVotes(teamId) {
     setVotes([]);
   };
 
+  // ─── pass 투표 취소 ──────────────────────────────────────────────────────
+  const cancelPass = async (menuName, voterName) => {
+    setVotes((prev) =>
+      prev.filter(
+        (v) => !(v.menu_name === menuName && v.voter_name === voterName && v.action === 'pass')
+      )
+    );
+    if (!teamId || !isValidUUID(teamId)) return;
+    await supabase
+      .from('votes')
+      .delete()
+      .eq('team_id', teamId)
+      .eq('menu_name', menuName)
+      .eq('voter_name', voterName)
+      .eq('action', 'pass');
+  };
+
   // ─── ok 투표 취소 ────────────────────────────────────────────────────────
   const cancelVote = async (menuName, voterName) => {
     // 로컬 상태에서 즉시 제거
@@ -244,6 +261,7 @@ export function useVotes(teamId) {
     // 액션
     castVote,
     cancelVote,
+    cancelPass,
     recordToHistory,
     clearVotes,
     // 수동 리프레시

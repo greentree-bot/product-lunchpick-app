@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useVotes } from '../hooks/useVotes';
 import { useNearbyRestaurants } from '../hooks/useNearbyRestaurants';
 import { useTeamSettings } from '../hooks/useTeamSettings';
+import { useTeam } from '../hooks/useTeam';
 import { storage } from '../lib/storage';
 
 const APP_URL = 'https://lunchpick.pages.dev';
@@ -12,9 +13,10 @@ export default function Vote() {
   const { teamId, memberName, teamName, inviteCode } = storage.load();
   const inviteLink = inviteCode ? `${APP_URL}/join/${inviteCode}` : null;
 
-  const { votes, weekMenuSet, loading: loadingVotes, castVote, cancelVote, okCountByMenu, passCountByMenu } = useVotes(teamId);
+  const { votes, weekMenuSet, weekHistory, loading: loadingVotes, castVote, cancelVote, cancelPass, okCountByMenu, passCountByMenu } = useVotes(teamId);
   const { restaurants, loading: loadingRestaurants, error: locationError, fetchNearby } = useNearbyRestaurants(weekMenuSet);
   const { settings, updateSettings, saving, isVotingClosed, deadlineDisplay, memberCount } = useTeamSettings(teamId);
+  const { changeName } = useTeam();
 
   // ─── 내 투표 로컬 상태 ────────────────────────────────────────────────────
   const [localOkMenu, setLocalOkMenu] = useState(null);
@@ -29,6 +31,12 @@ export default function Vote() {
   const [editMinVoters, setEditMinVoters] = useState(2);
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
   const [showHomeConfirm, setShowHomeConfirm] = useState(false);
+  const [hidePassedItems, setHidePassedItems] = useState(false);
+  const [sortBy, setSortBy] = useState('review'); // 'review' | 'distance'
+  const [showWeekHistory, setShowWeekHistory] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+  const [editName, setEditName] = useState('');
+  const [currentMemberName, setCurrentMemberName] = useState(memberName);
 
   useEffect(() => {
     if (!teamId || !memberName) navigate('/');
@@ -45,18 +53,30 @@ export default function Vote() {
         setEditDeadline(dl || '');
       }
       setEditMinVoters(settings.min_voters);
+      setEditName(currentMemberName);
     }
-  }, [showSettings, settings]);
+  }, [showSettings, settings, currentMemberName]);
 
   if (!teamId || !memberName) return null;
+
+  // ─── 토스트 헬퍼 ─────────────────────────────────────────────────────────
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 2500);
+  };
 
   // ─── DB 투표에서 오늘 내 투표 추출 ───────────────────────────────────────
   const today = new Date().toISOString().slice(0, 10);
   const myTodayVotes = votes.filter(
-    (v) => v.voter_name === memberName && v.voted_at?.slice(0, 10) === today
+    (v) => v.voter_name === currentMemberName && v.voted_at?.slice(0, 10) === today
   );
   const dbOkMenu = myTodayVotes.find((v) => v.action === 'ok')?.menu_name ?? null;
   const dbPassSet = new Set(myTodayVotes.filter((v) => v.action === 'pass').map((v) => v.menu_name));
+
+  // ─── 오늘 투표 참여 인원 (실시간) ────────────────────────────────────────
+  const todayVoterCount = new Set(
+    votes.filter((v) => v.voted_at?.slice(0, 10) === today).map((v) => v.voter_name)
+  ).size;
 
   const myOkMenu = dbOkMenu ?? localOkMenu;
   const myPassSet = new Set([...dbPassSet, ...localPassSet]);
@@ -75,7 +95,7 @@ export default function Vote() {
       setLocalOkMenu(null);
       setLocalOkCounts((prev) => { const n = { ...prev }; delete n[menuName]; return n; });
       if (teamId) {
-        try { await cancelVote(menuName, memberName); }
+        try { await cancelVote(menuName, currentMemberName); }
         catch (err) { console.error('[Vote] ok 취소 실패:', err.message); }
       }
       return;
@@ -87,27 +107,48 @@ export default function Vote() {
     setLocalOkMenu(menuName);
     setLocalOkCounts((prev) => ({ ...prev, [menuName]: (prev[menuName] ?? 0) + 1 }));
     if (teamId) {
-      try { await castVote(menuName, 'ok', memberName); }
+      try { await castVote(menuName, 'ok', currentMemberName); }
       catch (err) { console.error('[Vote] ok DB 저장 실패:', err.message); }
     }
   };
 
   const handlePass = async (restaurant) => {
-    if (isVotingClosed || myPassSet.has(restaurant.name)) return;
+    if (isVotingClosed) return;
     const menuName = restaurant.name;
+
+    // 이미 패스한 식당 → 취소
+    if (myPassSet.has(menuName)) {
+      setLocalPassSet((prev) => { const s = new Set(prev); s.delete(menuName); return s; });
+      if (teamId) {
+        try { await cancelPass(menuName, currentMemberName); }
+        catch (err) { console.error('[Vote] pass 취소 실패:', err.message); }
+      }
+      return;
+    }
+
     setLocalPassSet((prev) => new Set([...prev, menuName]));
     if (teamId) {
-      try { await castVote(menuName, 'pass', memberName); }
+      try { await castVote(menuName, 'pass', currentMemberName); }
       catch (err) { console.error('[Vote] pass DB 저장 실패:', err.message); }
     }
   };
 
   const handleSaveSettings = async () => {
     try {
-      await updateSettings({ vote_deadline: editDeadline, min_voters: Number(editMinVoters) });
+      const tasks = [updateSettings({ vote_deadline: editDeadline, min_voters: Number(editMinVoters) })];
+      const trimmedName = editName.trim();
+      if (trimmedName && trimmedName !== currentMemberName) {
+        tasks.push(
+          changeName(teamId, currentMemberName, trimmedName).then(() => {
+            setCurrentMemberName(trimmedName);
+          })
+        );
+      }
+      await Promise.all(tasks);
       setShowSettings(false);
+      showToast('✅ 설정이 저장됐습니다.');
     } catch (err) {
-      alert('설정 저장 실패: ' + err.message);
+      alert('저장 실패: ' + err.message);
     }
   };
 
@@ -160,11 +201,17 @@ export default function Vote() {
       {/* 투표 마감 배너 */}
       {isVotingClosed ? (
         <div style={styles.closedBanner}>
-          🔒 투표 마감됨 ({deadlineDisplay}) — 결과를 확인하세요
+          <span>🔒 투표 마감됨 ({deadlineDisplay})</span>
+          <button style={styles.bannerResultBtn} onClick={() => navigate('/result')}>
+            결과 보기 →
+          </button>
         </div>
       ) : (
         <div style={styles.openBanner}>
-          ⏰ 투표 마감: {deadlineDisplay} · {memberCount != null ? `${memberCount}명 중 ` : ''}최소 {settings.min_voters}명 참여 필요
+          ⏰ {deadlineDisplay} 마감 ·{' '}
+          {todayVoterCount > 0
+            ? `${todayVoterCount}/${memberCount ?? '?'}명 참여 중`
+            : `최소 ${settings.min_voters}명 필요`}
         </div>
       )}
 
@@ -174,7 +221,15 @@ export default function Vote() {
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 1rem' }}>⚙️ 투표 설정</h3>
 
-            <label style={styles.label}>투표 마감 일시 (팀 생성 후 기본 10분)</label>
+            <label style={styles.label}>내 이름 변경</label>
+            <input
+              style={styles.input}
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="이름 입력"
+            />
+
+            <label style={{ ...styles.label, marginTop: '0.75rem' }}>투표 마감 일시 (팀 생성 후 기본 10분)</label>
             <input
               type="datetime-local"
               style={styles.input}
@@ -332,7 +387,13 @@ export default function Vote() {
                   )}
                   {!isOked && (
                     isPassed ? (
-                      <span style={{ ...styles.badgePass, flex: 1, textAlign: 'center', padding: '0.6rem' }}>✗ 패스함</span>
+                      <button
+                        style={{ ...styles.btnPass, flex: 1, padding: '0.65rem', background: '#fecaca', color: '#b91c1c' }}
+                        onClick={() => { handlePass(r); setSelectedRestaurant(null); }}
+                        title="다시 누르면 취소"
+                      >
+                        ✗ 패스 (취소)
+                      </button>
                     ) : (
                       <button
                         style={{ ...styles.btnPass, flex: 1, padding: '0.65rem' }}
@@ -351,6 +412,11 @@ export default function Vote() {
         );
       })()}
 
+      {/* 토스트 알림 */}
+      {toastMsg && (
+        <div style={styles.toast}>{toastMsg}</div>
+      )}
+
       <main style={styles.main}>
         {/* 내 투표 현황 요약 */}
         {(myOkMenu || myPassSet.size > 0) && (
@@ -362,6 +428,11 @@ export default function Vote() {
           </div>
         )}
 
+        {restaurants.length === 0 && !loadingRestaurants && (
+          <p style={styles.locationHint}>
+            📍 현재 위치를 기반으로 반경 1km 내 식당을 검색합니다. 위치 권한 허용이 필요합니다.
+          </p>
+        )}
         <button
           style={styles.btnPrimary}
           onClick={fetchNearby}
@@ -376,15 +447,49 @@ export default function Vote() {
         {restaurants.length > 0 && (() => {
           const CATEGORY_ORDER = ['한식', '중식', '일식', '양식', '분식', '기타'];
           const CATEGORY_EMOJI = { 한식: '🍚', 중식: '🥢', 일식: '🍣', 양식: '🍝', 분식: '🥙', 기타: '🍴' };
+
+          // 정렬
+          const sortedList = sortBy === 'distance'
+            ? [...restaurants].sort((a, b) => a.distance - b.distance)
+            : restaurants; // 기본: 리뷰 많은 순
+
+          // 패스 숨기기 필터
+          const displayList = hidePassedItems
+            ? sortedList.filter((r) => !myPassSet.has(r.name))
+            : sortedList;
+
           const grouped = CATEGORY_ORDER.reduce((acc, cat) => {
-            const items = restaurants.filter((r) => r.mainCategory === cat);
+            const items = displayList.filter((r) => r.mainCategory === cat);
             if (items.length) acc.push({ cat, items });
             return acc;
           }, []);
 
           return (
           <section style={{ marginTop: '1.5rem' }}>
-            <h2 style={styles.sectionTitle}>주변 식당 {restaurants.length}곳</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <h2 style={{ ...styles.sectionTitle, margin: 0 }}>
+                주변 식당 {displayList.length}곳
+                <span style={{ fontSize: '0.75rem', color: '#9ca3af', fontWeight: 'normal', marginLeft: '0.4rem' }}>
+                  ({sortBy === 'review' ? '리뷰 많은 순' : '거리 가까운 순'})
+                </span>
+              </h2>
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <button
+                  style={{ ...styles.sortBtn, background: sortBy === 'review' ? '#ff6b35' : '#f3f4f6', color: sortBy === 'review' ? '#fff' : '#374151' }}
+                  onClick={() => setSortBy('review')}
+                >리뷰순</button>
+                <button
+                  style={{ ...styles.sortBtn, background: sortBy === 'distance' ? '#ff6b35' : '#f3f4f6', color: sortBy === 'distance' ? '#fff' : '#374151' }}
+                  onClick={() => setSortBy('distance')}
+                >거리순</button>
+                {myPassSet.size > 0 && (
+                  <button
+                    style={{ ...styles.sortBtn, background: hidePassedItems ? '#6b7280' : '#f3f4f6', color: hidePassedItems ? '#fff' : '#374151' }}
+                    onClick={() => setHidePassedItems((v) => !v)}
+                  >{hidePassedItems ? '패스 보기' : '패스 숨김'}</button>
+                )}
+              </div>
+            </div>
             {!isVotingClosed && !myOkMenu && (
               <p style={styles.voteHint}>💡 식당 1곳에만 '괜찮아요'를 누를 수 있어요. 선택 후 다시 누르면 취소됩니다.</p>
             )}
@@ -471,7 +576,13 @@ export default function Vote() {
                           )}
                           {!isOked && (
                             isPassed ? (
-                              <span style={styles.badgePass}>✗ 패스</span>
+                              <button
+                                style={{ ...styles.btnPass, background: '#fecaca', color: '#b91c1c' }}
+                                onClick={() => handlePass(r)}
+                                title="다시 누르면 취소"
+                              >
+                                ✗ 취소
+                              </button>
                             ) : (
                               <button style={styles.btnPass} onClick={() => handlePass(r)}>
                                 패스
@@ -490,6 +601,26 @@ export default function Vote() {
           </section>
           );
         })()}
+        {/* 이번 주 먹은 메뉴 */}
+        {weekHistory.length > 0 && (
+          <section style={{ marginTop: '1.5rem' }}>
+            <button
+              style={styles.weekToggleBtn}
+              onClick={() => setShowWeekHistory((v) => !v)}
+            >
+              📅 이번 주 먹은 메뉴 ({weekHistory.length}개) {showWeekHistory ? '▲' : '▼'}
+            </button>
+            {showWeekHistory && (
+              <ul style={{ listStyle: 'none', padding: 0, margin: '0.5rem 0 0' }}>
+                {weekHistory.map((menu, i) => (
+                  <li key={i} style={{ padding: '0.45rem 0.75rem', fontSize: '0.9rem', borderBottom: '1px solid #f3f4f6', color: '#374151' }}>
+                    🍱 {menu}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
       </main>
     </div>
   );
@@ -509,8 +640,12 @@ const styles = {
   },
   closedBanner: {
     background: '#fef2f2', borderBottom: '1px solid #fecaca',
-    padding: '0.5rem 1.5rem', fontSize: '0.85rem', color: '#dc2626', textAlign: 'center',
-    fontWeight: 'bold',
+    padding: '0.5rem 1.5rem', fontSize: '0.85rem', color: '#dc2626',
+    fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.75rem',
+  },
+  bannerResultBtn: {
+    padding: '0.25rem 0.75rem', fontSize: '0.82rem', background: '#dc2626',
+    color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold',
   },
   main: { padding: '1.5rem', maxWidth: '720px', margin: '0 auto' },
   sectionTitle: { fontSize: '1rem', color: '#444', margin: '0 0 0.75rem' },
@@ -524,8 +659,28 @@ const styles = {
     fontSize: '0.78rem', color: '#6b7280', fontWeight: '400',
   },
   voteHint: {
-    fontSize: '0.8rem', color: '#6b7280', margin: '0 0 0.75rem',
+    fontSize: '0.8rem', color: '#6b7280', margin: '0.5rem 0 0.75rem',
     background: '#f3f4f6', borderRadius: '6px', padding: '0.4rem 0.75rem',
+  },
+  locationHint: {
+    fontSize: '0.82rem', color: '#6b7280', margin: '0 0 0.5rem',
+    background: '#f9fafb', borderRadius: '6px', padding: '0.5rem 0.75rem',
+    border: '1px solid #e5e7eb',
+  },
+  sortBtn: {
+    padding: '0.25rem 0.6rem', fontSize: '0.75rem', border: 'none',
+    borderRadius: '5px', cursor: 'pointer', fontWeight: '600',
+  },
+  toast: {
+    position: 'fixed', bottom: '1.5rem', left: '50%', transform: 'translateX(-50%)',
+    background: '#1f2937', color: '#fff', padding: '0.65rem 1.25rem',
+    borderRadius: '8px', fontSize: '0.9rem', zIndex: 500,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+  },
+  weekToggleBtn: {
+    width: '100%', padding: '0.6rem 0.75rem', fontSize: '0.85rem',
+    background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px',
+    cursor: 'pointer', textAlign: 'left', fontWeight: '600', color: '#374151',
   },
   summaryBox: {
     display: 'flex', gap: '0.75rem', flexWrap: 'wrap',

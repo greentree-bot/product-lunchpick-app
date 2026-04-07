@@ -10,7 +10,7 @@ export default function Result() {
 
   const { votes, todayHistory, okCountByMenu, passCountByMenu, clearVotes, recordToHistory, loading } = useVotes(teamId);
   const [confirmedMenu, setConfirmedMenu] = useState(null);
-  const { settings, isVotingClosed } = useTeamSettings(teamId);
+  const { settings, isVotingClosed, deadlineDisplay } = useTeamSettings(teamId);
 
   useEffect(() => {
     if (!teamId) navigate('/');
@@ -38,7 +38,7 @@ export default function Result() {
     if (!isVotingClosed) {
       return (
         <p style={styles.statusInfo}>
-          현재 <strong>{totalVoters}명</strong> 투표 중 · 마감({settings.vote_deadline}) 후 {minVoters}명 이상이면 확정 가능
+          현재 <strong>{totalVoters}명</strong> 투표 중 · 마감({deadlineDisplay}) 후 {minVoters}명 이상이면 확정 가능
         </p>
       );
     }

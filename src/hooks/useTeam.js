@@ -96,5 +96,36 @@ export function useTeam() {
     }
   };
 
-  return { createTeam, joinTeam, getTeamByCode, loading, error };
+  // ─── 이름 변경 ──────────────────────────────────────────────────────────
+  const changeName = async (teamId, oldName, newName) => {
+    setLoading(true);
+    setError(null);
+    try {
+      // 중복 체크
+      const { data: existing } = await supabase
+        .from('members')
+        .select('id')
+        .eq('team_id', teamId)
+        .eq('name', newName)
+        .maybeSingle();
+      if (existing) throw new Error(`이미 "${newName}" 이름의 팀원이 있습니다.`);
+
+      const { error: updateErr } = await supabase
+        .from('members')
+        .update({ name: newName })
+        .eq('team_id', teamId)
+        .eq('name', oldName);
+      if (updateErr) throw updateErr;
+
+      // localStorage 업데이트
+      storage.save({ ...storage.load(), memberName: newName });
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { createTeam, joinTeam, getTeamByCode, changeName, loading, error };
 }
