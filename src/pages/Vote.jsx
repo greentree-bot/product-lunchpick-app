@@ -131,7 +131,7 @@ export default function Vote() {
           )}
           <button style={styles.btnGhost} onClick={() => setShowSettings(true)}>⚙️ 설정</button>
           <button style={styles.btnGhost} onClick={() => navigate('/result')}>결과 보기</button>
-          <button style={styles.btnGhost} onClick={handleLogout}>나가기</button>
+          <button style={styles.btnGhost} onClick={handleLogout}>HOME</button>
         </div>
       </header>
 
