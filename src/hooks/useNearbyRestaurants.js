@@ -1,7 +1,9 @@
 import { useState, useCallback } from 'react';
 
-// ─── 모듈 레벨 상수/함수 (훅 외부) ───────────────────────────────────────────
-// useCallback 의존성 배열에 추가할 필요 없음
+// ─── 모듈 레벨 상수/함수 ─────────────────────────────────────────────────────
+
+const SESSION_RESTAURANTS = 'lunchpick_restaurants';
+const SESSION_RAWLIST = 'lunchpick_rawlist';
 
 const CATEGORY_KEYWORDS = {
   한식: ['한식', '국밥', '해장국', '삼겹살', '갈비', '불고기', '순대', '보쌈', '족발', '찜', '탕', '찌개', '설렁탕', '육류', '곱창', '막창', '백반', '냉면'],
@@ -35,19 +37,33 @@ function toMenuCard(place) {
   };
 }
 
+function loadSession(key) {
+  try { return JSON.parse(sessionStorage.getItem(key) || '[]'); }
+  catch { return []; }
+}
+
+function saveSession(key, data) {
+  try { sessionStorage.setItem(key, JSON.stringify(data)); } catch {}
+}
+
 // ─── 훅 ──────────────────────────────────────────────────────────────────────
 
-/**
- * 현재 위치 기반 주변 음식점 검색 훅
- * @param {Set<string>} weekMenuSet - useVotes에서 받은 이번 주 메뉴명 Set
- * @param {number} radius - 검색 반경(m), 기본 300
- */
 export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
-  const [restaurants, setRestaurants] = useState([]);
-  const [rawList, setRawList] = useState([]);
+  const [restaurants, setRestaurants] = useState(() => loadSession(SESSION_RESTAURANTS));
+  const [rawList, setRawList] = useState(() => loadSession(SESSION_RAWLIST));
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const saveRestaurants = useCallback((list) => {
+    setRestaurants(list);
+    saveSession(SESSION_RESTAURANTS, list);
+  }, []);
+
+  const saveRawList = useCallback((list) => {
+    setRawList(list);
+    saveSession(SESSION_RAWLIST, list);
+  }, []);
 
   // ─── 1. 브라우저 Geolocation ─────────────────────────────────────────────
   const getCurrentLocation = useCallback(() => {
@@ -71,7 +87,7 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
     });
   }, []);
 
-  // ─── 2. /api/kakaomap 호출 ──────────────────────────────────────────────
+  // ─── 2. /api/naversearch 호출 ────────────────────────────────────────────
   const searchNearby = useCallback(async (coords) => {
     setLoading(true);
     setError(null);
@@ -85,17 +101,17 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
       }
 
       const places = data.documents ?? [];
-      setRawList(places);
+      saveRawList(places);
 
       if (places.length === 0) {
-        setError('주변 1km 내 식당을 찾지 못했습니다. 위치 권한을 확인해 주세요.');
+        setError('주변 식당을 찾지 못했습니다. 위치 권한을 확인해 주세요.');
       }
 
       const filtered = places
         .map(toMenuCard)
         .filter((card) => !weekMenuSet.has(card.name));
 
-      setRestaurants(filtered);
+      saveRestaurants(filtered);
 
     } catch (err) {
       console.error('[useNearbyRestaurants]', err.message);
@@ -103,7 +119,7 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
     } finally {
       setLoading(false);
     }
-  }, [radius, weekMenuSet]);
+  }, [radius, weekMenuSet, saveRawList, saveRestaurants]);
 
   // ─── 3. 위치 + 검색 통합 실행 ──────────────────────────────────────────
   const fetchNearby = useCallback(async () => {
@@ -124,8 +140,8 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
   const refilter = useCallback(() => {
     if (!rawList.length) return;
     const filtered = rawList.map(toMenuCard).filter((card) => !weekMenuSet.has(card.name));
-    setRestaurants(filtered);
-  }, [rawList, weekMenuSet]);
+    saveRestaurants(filtered);
+  }, [rawList, weekMenuSet, saveRestaurants]);
 
   return { restaurants, location, loading, error, fetchNearby, searchNearby, refilter };
 }

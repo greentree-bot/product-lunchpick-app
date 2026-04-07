@@ -12,9 +12,9 @@ export default function Vote() {
   const { teamId, memberName, teamName, inviteCode } = storage.load();
   const inviteLink = inviteCode ? `${APP_URL}/join/${inviteCode}` : null;
 
-  const { votes, weekMenuSet, loading: loadingVotes, castVote, okCountByMenu, passCountByMenu } = useVotes(teamId);
+  const { votes, weekMenuSet, loading: loadingVotes, castVote, cancelVote, okCountByMenu, passCountByMenu } = useVotes(teamId);
   const { restaurants, loading: loadingRestaurants, error: locationError, fetchNearby } = useNearbyRestaurants(weekMenuSet);
-  const { settings, updateSettings, saving, isVotingClosed } = useTeamSettings(teamId);
+  const { settings, updateSettings, saving, isVotingClosed, deadlineDisplay, memberCount } = useTeamSettings(teamId);
 
   // ─── 내 투표 로컬 상태 ────────────────────────────────────────────────────
   const [localOkMenu, setLocalOkMenu] = useState(null);
@@ -28,15 +28,22 @@ export default function Vote() {
   const [editDeadline, setEditDeadline] = useState('');
   const [editMinVoters, setEditMinVoters] = useState(2);
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
+  const [showHomeConfirm, setShowHomeConfirm] = useState(false);
 
   useEffect(() => {
     if (!teamId || !memberName) navigate('/');
   }, [teamId, memberName, navigate]);
 
-  // 설정 모달 열 때 현재값 복사
+  // 설정 모달 열 때 현재값 복사 (레거시 HH:MM → 오늘날짜T시간 변환)
   useEffect(() => {
     if (showSettings) {
-      setEditDeadline(settings.vote_deadline);
+      const dl = settings.vote_deadline;
+      if (dl && !dl.includes('T')) {
+        const today = new Date().toISOString().slice(0, 10);
+        setEditDeadline(`${today}T${dl}`);
+      } else {
+        setEditDeadline(dl || '');
+      }
       setEditMinVoters(settings.min_voters);
     }
   }, [showSettings, settings]);
@@ -60,8 +67,23 @@ export default function Vote() {
 
   // ─── 투표 핸들러 ─────────────────────────────────────────────────────────
   const handleOk = async (restaurant) => {
-    if (isVotingClosed || myOkMenu) return;
+    if (isVotingClosed) return;
     const menuName = restaurant.name;
+
+    // 같은 식당 재클릭 → 취소
+    if (myOkMenu === menuName) {
+      setLocalOkMenu(null);
+      setLocalOkCounts((prev) => { const n = { ...prev }; delete n[menuName]; return n; });
+      if (teamId) {
+        try { await cancelVote(menuName, memberName); }
+        catch (err) { console.error('[Vote] ok 취소 실패:', err.message); }
+      }
+      return;
+    }
+
+    // 다른 식당에 이미 ok → 불가
+    if (myOkMenu) return;
+
     setLocalOkMenu(menuName);
     setLocalOkCounts((prev) => ({ ...prev, [menuName]: (prev[menuName] ?? 0) + 1 }));
     if (teamId) {
@@ -89,7 +111,7 @@ export default function Vote() {
     }
   };
 
-  const handleLogout = () => { storage.clear(); navigate('/'); };
+  const handleLogout = () => { setShowHomeConfirm(true); };
 
   const copyLink = async () => {
     if (!inviteLink) return;
@@ -123,7 +145,7 @@ export default function Vote() {
       <header style={styles.header}>
         <div>
           <h1 style={styles.headerTitle}>🍽️ 런치픽</h1>
-          <p style={styles.headerSub}>{teamName} · {memberName}</p>
+          <p style={styles.headerSub}>{teamName} · {memberName} · 팀원 {memberCount ?? '?'}명</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {inviteLink && (
@@ -138,11 +160,11 @@ export default function Vote() {
       {/* 투표 마감 배너 */}
       {isVotingClosed ? (
         <div style={styles.closedBanner}>
-          🔒 투표 마감됨 ({settings.vote_deadline}) — 결과를 확인하세요
+          🔒 투표 마감됨 ({deadlineDisplay}) — 결과를 확인하세요
         </div>
       ) : (
         <div style={styles.openBanner}>
-          ⏰ 투표 마감: {settings.vote_deadline} · 최소 {settings.min_voters}명 참여 필요
+          ⏰ 투표 마감: {deadlineDisplay} · {memberCount != null ? `${memberCount}명 중 ` : ''}최소 {settings.min_voters}명 참여 필요
         </div>
       )}
 
@@ -152,9 +174,9 @@ export default function Vote() {
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 1rem' }}>⚙️ 투표 설정</h3>
 
-            <label style={styles.label}>투표 마감 시간 (팀 생성 후 기본 10분)</label>
+            <label style={styles.label}>투표 마감 일시 (팀 생성 후 기본 10분)</label>
             <input
-              type="time"
+              type="datetime-local"
               style={styles.input}
               value={editDeadline}
               onChange={(e) => setEditDeadline(e.target.value)}
@@ -204,6 +226,26 @@ export default function Vote() {
               <button style={styles.btnKakao} onClick={handleShare}>공유하기</button>
             </div>
             <button style={styles.btnClose} onClick={() => setShowInvite(false)}>닫기</button>
+          </div>
+        </div>
+      )}
+
+      {/* HOME 나가기 확인 모달 */}
+      {showHomeConfirm && (
+        <div style={styles.modalOverlay} onClick={() => setShowHomeConfirm(false)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 0.75rem' }}>팀에서 나가기</h3>
+            <p style={{ color: '#555', fontSize: '0.9rem', margin: '0 0 1.25rem', lineHeight: 1.5 }}>
+              나가면 로컬 정보가 삭제됩니다.<br />
+              재참여하려면 초대 링크가 필요합니다.
+            </p>
+            <button
+              style={{ ...styles.btnPrimary, background: '#ef4444', marginBottom: '0.5rem' }}
+              onClick={() => { storage.clear(); navigate('/'); }}
+            >
+              나가기
+            </button>
+            <button style={styles.btnClose} onClick={() => setShowHomeConfirm(false)}>취소</button>
           </div>
         </div>
       )}
@@ -272,7 +314,13 @@ export default function Vote() {
               {!isVotingClosed && (
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem' }}>
                   {isOked ? (
-                    <span style={{ ...styles.badgeOk, flex: 1, textAlign: 'center', padding: '0.6rem' }}>✓ 괜찮아요 선택됨</span>
+                    <button
+                      style={{ ...styles.btnOk, flex: 1, background: '#15803d', padding: '0.65rem' }}
+                      onClick={() => { handleOk(r); setSelectedRestaurant(null); }}
+                      title="다시 누르면 취소"
+                    >
+                      ✓ 괜찮아요 (취소)
+                    </button>
                   ) : (
                     <button
                       style={{ ...styles.btnOk, flex: 1, opacity: myOkMenu ? 0.3 : 1, cursor: myOkMenu ? 'not-allowed' : 'pointer', padding: '0.65rem' }}
@@ -315,11 +363,11 @@ export default function Vote() {
         )}
 
         <button
-          style={{ ...styles.btnPrimary, opacity: isVotingClosed ? 0.5 : 1 }}
+          style={styles.btnPrimary}
           onClick={fetchNearby}
-          disabled={loadingRestaurants || isVotingClosed}
+          disabled={loadingRestaurants}
         >
-          {loadingRestaurants ? '검색 중...' : isVotingClosed ? '🔒 투표 마감됨' : '📍 내 주변 식당 찾기'}
+          {loadingRestaurants ? '검색 중...' : '📍 내 주변 식당 찾기'}
         </button>
 
         {locationError && <p style={{ color: 'red', margin: '0.5rem 0' }}>오류: {locationError}</p>}
@@ -337,6 +385,9 @@ export default function Vote() {
           return (
           <section style={{ marginTop: '1.5rem' }}>
             <h2 style={styles.sectionTitle}>주변 식당 {restaurants.length}곳</h2>
+            {!isVotingClosed && !myOkMenu && (
+              <p style={styles.voteHint}>💡 식당 1곳에만 '괜찮아요'를 누를 수 있어요. 선택 후 다시 누르면 취소됩니다.</p>
+            )}
             {grouped.map(({ cat, items }) => (
               <div key={cat} style={{ marginBottom: '1.25rem' }}>
                 <div style={styles.catHeader}>
@@ -402,7 +453,13 @@ export default function Vote() {
                       ) : (
                         <>
                           {isOked ? (
-                            <span style={styles.badgeOk}>✓ 괜찮아요</span>
+                            <button
+                              style={{ ...styles.btnOk, background: '#15803d' }}
+                              onClick={() => handleOk(r)}
+                              title="다시 누르면 취소"
+                            >
+                              ✓ 취소
+                            </button>
                           ) : (
                             <button
                               style={{ ...styles.btnOk, opacity: myOkMenu ? 0.3 : 1, cursor: myOkMenu ? 'not-allowed' : 'pointer' }}
@@ -465,6 +522,10 @@ const styles = {
   },
   catCount: {
     fontSize: '0.78rem', color: '#6b7280', fontWeight: '400',
+  },
+  voteHint: {
+    fontSize: '0.8rem', color: '#6b7280', margin: '0 0 0.75rem',
+    background: '#f3f4f6', borderRadius: '6px', padding: '0.4rem 0.75rem',
   },
   summaryBox: {
     display: 'flex', gap: '0.75rem', flexWrap: 'wrap',

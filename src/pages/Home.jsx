@@ -88,22 +88,29 @@ export default function Home() {
       <div style={styles.container}>
         <h1 style={styles.title}>🍽️ 런치픽</h1>
         <div style={styles.card}>
-          <h2 style={{ marginTop: 0 }}>팀이 만들어졌어요!</h2>
-          <p style={{ color: '#666' }}>팀원들에게 아래 링크를 공유하세요</p>
+          <h2 style={{ marginTop: 0 }}>팀이 만들어졌어요! 🎉</h2>
+          <p style={{ color: '#e67e22', fontWeight: '600', fontSize: '0.9rem', margin: '0 0 0.75rem' }}>
+            먼저 팀원들에게 공유하세요. 참여 후 함께 투표할 수 있어요.
+          </p>
           <div style={styles.linkBox}>{inviteLink}</div>
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
-            <button style={styles.btnSecondary} onClick={copyLink}>
-              {copied ? '✓ 복사됨' : '링크 복사'}
-            </button>
-            <button style={styles.btnKakao} onClick={handleShare}>
-              공유하기
-            </button>
-          </div>
           <button
-            style={{ ...styles.btnPrimary, marginTop: '1.5rem', width: '100%' }}
+            style={{ ...styles.btnPrimary, marginTop: '0.75rem', width: '100%' }}
+            onClick={handleShare}
+          >
+            📤 팀원에게 공유하기
+          </button>
+          <button
+            style={{ ...styles.btnSecondary, marginTop: '0.5rem', width: '100%' }}
+            onClick={copyLink}
+          >
+            {copied ? '✓ 링크 복사됨' : '🔗 링크 복사'}
+          </button>
+          <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '1rem 0' }} />
+          <button
+            style={{ ...styles.btnGhost, width: '100%', fontSize: '0.9rem', padding: '0.6rem' }}
             onClick={() => navigate('/vote')}
           >
-            투표 시작하기
+            공유 완료 · 투표 화면으로 이동
           </button>
         </div>
       </div>

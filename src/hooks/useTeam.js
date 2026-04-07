@@ -14,11 +14,12 @@ export function useTeam() {
     setLoading(true);
     setError(null);
     try {
-      // 생성 시각 + 10분을 기본 마감 시간으로 설정
+      // 생성 시각 + 10분을 기본 마감으로 설정 (ISO datetime 형식)
       const deadline = (() => {
         const d = new Date();
         d.setMinutes(d.getMinutes() + 10);
-        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        // "YYYY-MM-DDTHH:MM" — 날짜 포함으로 다음날 오작동 방지
+        return d.toISOString().slice(0, 16);
       })();
 
       // 1. teams 테이블에 팀 생성
@@ -66,7 +67,18 @@ export function useTeam() {
       // 1. 초대코드로 팀 조회
       const team = await getTeamByCode(inviteCode);
 
-      // 2. members 테이블에 등록
+      // 2. 동일 이름 중복 체크
+      const { data: existingMember } = await supabase
+        .from('members')
+        .select('id')
+        .eq('team_id', team.id)
+        .eq('name', memberName)
+        .maybeSingle();
+      if (existingMember) {
+        throw new Error(`이미 "${memberName}" 이름의 팀원이 있습니다. 다른 이름(예: ${memberName}2)을 사용해 주세요.`);
+      }
+
+      // 3. members 테이블에 등록
       const { error: memberErr } = await supabase
         .from('members')
         .insert({ team_id: team.id, name: memberName });

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useVotes } from '../hooks/useVotes';
 import { useTeamSettings } from '../hooks/useTeamSettings';
@@ -9,6 +9,7 @@ export default function Result() {
   const { teamId, teamName } = storage.load();
 
   const { votes, todayHistory, okCountByMenu, passCountByMenu, clearVotes, recordToHistory, loading } = useVotes(teamId);
+  const [confirmedMenu, setConfirmedMenu] = useState(null);
   const { settings, isVotingClosed } = useTeamSettings(teamId);
 
   useEffect(() => {
@@ -29,7 +30,7 @@ export default function Result() {
     if (!topMenu || !canConfirm) return;
     await recordToHistory(topMenu);
     await clearVotes();
-    navigate('/vote');
+    setConfirmedMenu(topMenu); // 확정 완료 화면 표시 (즉시 이동 X)
   };
 
   const voterStatus = () => {
@@ -54,6 +55,35 @@ export default function Result() {
       </p>
     );
   };
+
+  // ─── 확정 완료 화면 ───────────────────────────────────────────────────────
+  if (confirmedMenu) {
+    return (
+      <div style={{ fontFamily: 'sans-serif', minHeight: '100vh', background: '#f0fdf4', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎉</div>
+        <h1 style={{ margin: '0 0 0.5rem', fontSize: '1.4rem', color: '#15803d' }}>오늘의 점심이 확정됐어요!</h1>
+        <div style={{ fontSize: '1.6rem', fontWeight: 'bold', color: '#1f2937', margin: '1rem 0', padding: '1rem 2rem', background: '#fff', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', textAlign: 'center' }}>
+          {confirmedMenu}
+        </div>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center', marginTop: '0.5rem' }}>
+          <a
+            href={`https://map.naver.com/v5/search/${encodeURIComponent(confirmedMenu)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ padding: '0.6rem 1.2rem', background: '#03c75a', color: '#fff', borderRadius: '8px', fontSize: '0.9rem', fontWeight: '700', textDecoration: 'none' }}
+          >
+            네이버 지도에서 메뉴 보기
+          </a>
+          <button
+            style={{ padding: '0.6rem 1.2rem', background: '#ff6b35', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '0.9rem', fontWeight: '700', cursor: 'pointer' }}
+            onClick={() => navigate('/vote')}
+          >
+            새 투표 시작하기
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ fontFamily: 'sans-serif', minHeight: '100vh' }}>
