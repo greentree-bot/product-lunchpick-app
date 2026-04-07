@@ -92,9 +92,14 @@ export default function Result() {
           <h1 style={styles.headerTitle}>🍽️ 투표 결과</h1>
           <p style={styles.headerSub}>{teamName} · 총 {totalVoters}명 투표</p>
         </div>
-        <button style={styles.btnGhost} onClick={() => navigate('/vote')}>
-          돌아가기
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button style={styles.btnGhost} onClick={() => navigate('/vote')}>
+            돌아가기
+          </button>
+          <button style={styles.btnHome} onClick={() => navigate('/')}>
+            HOME
+          </button>
+        </div>
       </header>
 
       <main style={styles.main}>
@@ -268,6 +273,11 @@ const styles = {
   btnGhost: {
     padding: '0.4rem 0.75rem', fontSize: '0.85rem', background: 'transparent',
     color: '#666', border: '1px solid #ddd', borderRadius: '6px', cursor: 'pointer',
+  },
+  btnHome: {
+    padding: '0.4rem 0.75rem', fontSize: '0.85rem', fontWeight: '700',
+    background: '#1e293b', color: '#fff',
+    border: 'none', borderRadius: '6px', cursor: 'pointer',
   },
   historyItem: {
     padding: '0.6rem 1rem', borderRadius: '8px', background: '#f9fafb',
