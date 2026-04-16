@@ -24,7 +24,7 @@ export default function Vote() {
   const inviteLink = inviteCode ? `${APP_URL}/join/${inviteCode}` : null;
 
   // ── 화면 상태 ──────────────────────────────────────────────────────────────
-  const [screen, setScreen] = useState('vote'); // 'vote' | 'waiting' | 'result'
+  const [screen, setScreen] = useState('vote'); // 'vote' | 'done' | 'waiting' | 'result'
   const [cardIndex, setCardIndex] = useState(0);
   const [members, setMembers] = useState([]);
   const [currentMemberName, setCurrentMemberName] = useState(memberName);
@@ -137,7 +137,8 @@ export default function Vote() {
     setCardIndex(next);
 
     if (next >= menus.length) {
-      setScreen('waiting');
+      setScreen('done');
+      setTimeout(() => setScreen('waiting'), 1800);
     }
   };
 
@@ -340,6 +341,24 @@ export default function Vote() {
   );
 
   // ════════════════════════════════════════════════════════════════════════════
+  // 투표 완료 확인 화면 (1.8초 후 대기 화면으로 자동 전환)
+  // ════════════════════════════════════════════════════════════════════════════
+  if (screen === 'done') {
+    return (
+      <div style={styles.doneBg}>
+        <div style={styles.doneCard}>
+          <span style={styles.doneEmoji}>🎉</span>
+          <h2 style={styles.doneTitle}>투표 완료!</h2>
+          <p style={styles.doneSubtitle}>
+            {currentMemberName}님의 투표가 저장됐어요
+          </p>
+          <p style={styles.doneHint}>팀원들의 투표를 기다리는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
   // 대기 화면
   // ════════════════════════════════════════════════════════════════════════════
   if (screen === 'waiting') {
@@ -437,6 +456,52 @@ export default function Vote() {
 }
 
 const styles = {
+  /* 투표 완료 확인 화면 */
+  doneBg: {
+    minHeight: '100dvh',
+    backgroundColor: '#FFFBEB',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontFamily: 'sans-serif',
+  },
+  doneCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '48px 40px',
+    background: '#fff',
+    borderRadius: '24px',
+    boxShadow: '0 8px 40px rgba(0,0,0,0.10)',
+    textAlign: 'center',
+    maxWidth: '320px',
+    width: '90%',
+    animation: 'fadeInUp 0.4s ease',
+  },
+  doneEmoji: {
+    fontSize: '64px',
+    lineHeight: 1,
+    filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.12))',
+  },
+  doneTitle: {
+    margin: 0,
+    fontSize: '28px',
+    fontWeight: '900',
+    color: '#1f2937',
+  },
+  doneSubtitle: {
+    margin: 0,
+    fontSize: '15px',
+    fontWeight: '600',
+    color: '#374151',
+  },
+  doneHint: {
+    margin: 0,
+    fontSize: '13px',
+    color: '#9ca3af',
+  },
+
   header: {
     display: 'flex',
     justifyContent: 'space-between',
