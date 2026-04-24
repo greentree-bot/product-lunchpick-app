@@ -16,28 +16,42 @@ export default function Home() {
   const [joinName, setJoinName] = useState('');
   const [inviteLink, setInviteLink] = useState('');
   const [copied, setCopied] = useState(false);
+  const [localError, setLocalError] = useState('');
 
   useEffect(() => {
-    const { teamId, memberName } = storage.load();
-    if (teamId && memberName) navigate('/vote');
+    const { teamId, memberName, soloMode } = storage.load();
+    if (soloMode) navigate('/vote');
+    else if (teamId && memberName) navigate('/vote');
   }, [navigate]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!teamName.trim() || !createName.trim()) return;
+    setLocalError('');
     try {
       const team = await createTeam(teamName.trim(), createName.trim());
       setInviteLink(`${APP_URL}/join/${team.invite_code}`);
-    } catch {}
+    } catch (err) {
+      setLocalError(err.message || '팀 생성에 실패했습니다. 다시 시도해 주세요.');
+    }
   };
 
   const handleJoin = async (e) => {
     e.preventDefault();
     if (!inviteCode.trim() || !joinName.trim()) return;
+    setLocalError('');
     try {
       await joinTeam(inviteCode.trim(), joinName.trim());
       navigate('/vote');
-    } catch {}
+    } catch (err) {
+      setLocalError(err.message || '팀 참여에 실패했습니다. 초대 코드를 확인해 주세요.');
+    }
+  };
+
+  // ─── 솔로 모드 ──────────────────────────────────────────────────────────
+  const handleSolo = () => {
+    storage.save({ soloMode: true, memberName: '나', teamName: '솔로' });
+    navigate('/vote');
   };
 
   const copyLink = async () => {
@@ -57,6 +71,8 @@ export default function Home() {
       copyLink();
     }
   };
+
+  const displayError = localError || error;
 
   // ─── 팀 생성 완료 ────────────────────────────────────────────────────────
   if (inviteLink) {
@@ -127,6 +143,14 @@ export default function Home() {
           <button style={s.btnOutline} onClick={() => setTab('join')}>
             팀 참여하기
           </button>
+          <div style={s.soloSeparator}>
+            <span style={s.soloLine} />
+            <span style={s.soloOrText}>또는</span>
+            <span style={s.soloLine} />
+          </div>
+          <button style={s.btnSolo} onClick={handleSolo}>
+            🍴 혼자 결정하기
+          </button>
         </div>
       )}
 
@@ -149,11 +173,11 @@ export default function Home() {
               onChange={(e) => setCreateName(e.target.value)}
               required
             />
-            {error && <p style={s.errMsg}>{error}</p>}
+            {displayError && <p style={s.errMsg}>{displayError}</p>}
             <button style={s.btnPrimary} type="submit" disabled={loading}>
               {loading ? '생성 중…' : '팀 만들기'}
             </button>
-            <button style={s.btnBack} type="button" onClick={() => setTab('select')}>
+            <button style={s.btnBack} type="button" onClick={() => { setTab('select'); setLocalError(''); }}>
               ← 뒤로
             </button>
           </form>
@@ -180,27 +204,21 @@ export default function Home() {
               onChange={(e) => setJoinName(e.target.value)}
               required
             />
-            {error && <p style={s.errMsg}>{error}</p>}
+            {displayError && <p style={s.errMsg}>{displayError}</p>}
             <button style={s.btnPrimary} type="submit" disabled={loading}>
               {loading ? '참여 중…' : '참여하기'}
             </button>
-            <button style={s.btnBack} type="button" onClick={() => setTab('select')}>
+            <button style={s.btnBack} type="button" onClick={() => { setTab('select'); setLocalError(''); }}>
               ← 뒤로
             </button>
           </form>
         </div>
       )}
-
-      {/* CSS hack: placeholder 색상 */}
-      <style>{`
-        input::placeholder { color: rgba(255,255,255,0.35); }
-        input { caret-color: #ff6b35; }
-      `}</style>
     </Page>
   );
 }
 
-// ─── 공통 배경 wrapper (Home 외부에 정의 — 내부 정의 시 매 렌더마다 unmount/remount 발생) ───
+// ─── 공통 배경 wrapper ───
 function Page({ children }) {
   return (
     <div style={s.page}>
@@ -215,15 +233,12 @@ function Page({ children }) {
 
 // ─── 스타일 ──────────────────────────────────────────────────────────────────
 const s = {
-  /* 최외곽 — 다크 그라디언트, 높이 100vh 고정 */
   page: {
     minHeight: '100vh',
-    background: 'linear-gradient(155deg, #0f172a 0%, #1e293b 55%, #1e1b4b 100%)',
+    background: 'var(--bg-gradient)',
     position: 'relative',
-    fontFamily: "'Segoe UI', 'Apple SD Gothic Neo', sans-serif",
+    fontFamily: 'var(--font-family)',
   },
-
-  /* 글로우 — position:fixed 로 레이아웃에 무관 */
   glowOrange: {
     position: 'fixed', top: '-8%', right: '-8%',
     width: '45vw', height: '45vw', borderRadius: '50%',
@@ -236,8 +251,6 @@ const s = {
     background: 'radial-gradient(circle, rgba(99,102,241,0.14) 0%, transparent 65%)',
     pointerEvents: 'none', zIndex: 0,
   },
-
-  /* 스크롤 영역 */
   scroll: {
     position: 'relative', zIndex: 1,
     minHeight: '100vh',
@@ -247,8 +260,6 @@ const s = {
     padding: '3rem 1.25rem',
     boxSizing: 'border-box',
   },
-
-  /* 콘텐츠 최대 너비 */
   inner: {
     width: '100%',
     maxWidth: '400px',
@@ -265,7 +276,7 @@ const s = {
   },
   logoSub: {
     margin: '0 0 2.5rem', fontSize: '0.95rem',
-    color: 'rgba(255,255,255,0.5)', textAlign: 'center',
+    color: 'var(--text-muted)', textAlign: 'center',
   },
 
   /* STEP 리스트 */
@@ -275,102 +286,124 @@ const s = {
   },
   stepRow: {
     display: 'flex', alignItems: 'center', gap: '0.85rem',
-    background: 'rgba(255,255,255,0.06)',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '14px', padding: '0.85rem 1rem',
+    background: 'var(--bg-card)',
+    border: '1px solid var(--border-subtle)',
+    borderRadius: 'var(--radius-md)', padding: '0.85rem 1rem',
   },
   stepNum: {
     width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
-    background: 'linear-gradient(135deg,#ff6b35,#f59e0b)',
+    background: 'var(--accent-gradient)',
     color: '#fff', fontSize: '0.8rem', fontWeight: '800',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
   stepIcon: { fontSize: '1.35rem', flexShrink: 0 },
-  stepTitle: { fontSize: '0.9rem', fontWeight: '700', color: '#f1f5f9', marginBottom: '0.1rem' },
-  stepDesc:  { fontSize: '0.76rem', color: 'rgba(255,255,255,0.45)' },
+  stepTitle: { fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '0.1rem' },
+  stepDesc:  { fontSize: '0.76rem', color: 'var(--text-muted)' },
 
   /* 버튼 묶음 */
   btnStack: {
     width: '100%', display: 'flex', flexDirection: 'column', gap: '0.7rem',
   },
 
-  /* 카드 (폼 + 공유 화면) */
+  /* 카드 */
   card: {
     width: '100%',
-    background: 'rgba(255,255,255,0.07)',
-    border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: '20px',
+    background: 'var(--bg-card)',
+    border: '1px solid var(--border-card)',
+    borderRadius: 'var(--radius-lg)',
     padding: '1.75rem 1.5rem',
     display: 'flex', flexDirection: 'column', gap: '0',
   },
   badge: {
     display: 'inline-block', alignSelf: 'flex-start',
-    background: 'linear-gradient(135deg,#ff6b35,#f59e0b)',
+    background: 'var(--accent-gradient)',
     color: '#fff', fontSize: '0.75rem', fontWeight: '700',
-    padding: '0.22rem 0.7rem', borderRadius: '999px',
+    padding: '0.22rem 0.7rem', borderRadius: 'var(--radius-full)',
     marginBottom: '0.85rem', letterSpacing: '0.04em',
   },
   cardTitle: {
     margin: '0 0 0.35rem', fontSize: '1.35rem',
-    fontWeight: '800', color: '#f1f5f9',
+    fontWeight: '800', color: 'var(--text-primary)',
   },
   cardDesc: {
     margin: '0 0 1.25rem', fontSize: '0.87rem',
-    color: 'rgba(255,255,255,0.48)', lineHeight: 1.55,
+    color: 'var(--text-muted)', lineHeight: 1.55,
   },
 
   /* 초대 링크 박스 */
   linkBox: {
     background: 'rgba(0,0,0,0.3)',
-    border: '1px solid rgba(255,255,255,0.1)',
+    border: '1px solid var(--border-subtle)',
     borderRadius: '10px', padding: '0.7rem 1rem',
     marginBottom: '1rem',
   },
   linkText: {
     margin: 0, fontSize: '0.76rem',
-    color: 'rgba(255,255,255,0.45)', wordBreak: 'break-all', lineHeight: 1.55,
+    color: 'var(--text-muted)', wordBreak: 'break-all', lineHeight: 1.55,
   },
 
   /* 구분선 */
   divider: {
-    height: '1px', background: 'rgba(255,255,255,0.1)', margin: '1.1rem 0',
+    height: '1px', background: 'var(--border-subtle)', margin: '1.1rem 0',
   },
 
   /* ─ 버튼들 ─ */
   btnPrimary: {
     width: '100%', padding: '1rem', fontSize: '1rem', fontWeight: '700',
-    background: 'linear-gradient(135deg,#ff6b35 0%,#f59e0b 100%)',
-    color: '#fff', border: 'none', borderRadius: '14px',
+    background: 'var(--accent-gradient)',
+    color: '#fff', border: 'none', borderRadius: 'var(--radius-md)',
     cursor: 'pointer', marginBottom: '0.6rem',
-    boxShadow: '0 4px 18px rgba(255,107,53,0.38)',
+    boxShadow: 'var(--shadow-glow-orange)',
     letterSpacing: '0.01em',
+    transition: 'transform 0.15s ease, box-shadow 0.15s ease',
   },
   btnOutline: {
     width: '100%', padding: '0.9rem', fontSize: '0.97rem', fontWeight: '600',
-    background: 'rgba(255,255,255,0.07)',
-    color: 'rgba(255,255,255,0.85)',
+    background: 'var(--bg-card)',
+    color: 'var(--text-secondary)',
     border: '1.5px solid rgba(255,255,255,0.22)',
-    borderRadius: '14px', cursor: 'pointer', marginBottom: '0',
+    borderRadius: 'var(--radius-md)', cursor: 'pointer', marginBottom: '0',
+    transition: 'background 0.15s ease',
   },
   btnWhite: {
     width: '100%', padding: '1rem', fontSize: '1rem', fontWeight: '700',
     background: '#ffffff', color: '#1e293b',
-    border: 'none', borderRadius: '14px', cursor: 'pointer',
+    border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer',
     letterSpacing: '0.01em',
   },
   btnBack: {
     background: 'transparent', border: 'none',
-    color: 'rgba(255,255,255,0.38)', fontSize: '0.9rem',
+    color: 'var(--text-muted)', fontSize: '0.9rem',
     cursor: 'pointer', padding: '0.5rem', marginTop: '0.1rem', alignSelf: 'center',
+  },
+  btnSolo: {
+    width: '100%', padding: '0.85rem', fontSize: '0.95rem', fontWeight: '600',
+    background: 'rgba(139,92,246,0.15)',
+    color: '#c4b5fd',
+    border: '1.5px solid rgba(139,92,246,0.3)',
+    borderRadius: 'var(--radius-md)', cursor: 'pointer',
+    transition: 'background 0.15s ease, border-color 0.15s ease',
+  },
+
+  /* 솔로 구분선 */
+  soloSeparator: {
+    display: 'flex', alignItems: 'center', gap: '0.75rem',
+    margin: '0.3rem 0',
+  },
+  soloLine: {
+    flex: 1, height: '1px', background: 'rgba(255,255,255,0.12)',
+  },
+  soloOrText: {
+    fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: '500',
   },
 
   /* 폼 */
   form: { display: 'flex', flexDirection: 'column', gap: '0.7rem', marginTop: '1.1rem' },
   input: {
     padding: '0.9rem 1rem', fontSize: '1rem',
-    background: 'rgba(255,255,255,0.09)',
-    border: '1px solid rgba(255,255,255,0.16)',
-    borderRadius: '11px', color: '#f1f5f9', outline: 'none',
+    background: 'var(--bg-input)',
+    border: '1px solid var(--border-input)',
+    borderRadius: '11px', color: 'var(--text-primary)', outline: 'none',
     width: '100%', boxSizing: 'border-box',
   },
   errMsg: { margin: 0, fontSize: '0.84rem', color: '#fca5a5' },

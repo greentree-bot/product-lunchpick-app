@@ -13,6 +13,9 @@ const CATEGORY_KEYWORDS = {
   분식: ['분식', '떡볶이', '라면', '김밥', '순대'],
 };
 
+// 카테고리 목록을 export (Vote.jsx에서 필터 칩 UI에 사용)
+export const CATEGORIES = ['전체', ...Object.keys(CATEGORY_KEYWORDS)];
+
 function getMainCategory(fullCategory = '') {
   for (const [main, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     if (keywords.some((kw) => fullCategory.includes(kw))) return main;
@@ -54,6 +57,7 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('전체');
 
   const saveRestaurants = useCallback((list) => {
     setRestaurants(list);
@@ -76,9 +80,9 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
         (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         (err) => {
           const messages = {
-            1: '위치 접근 권한이 거부되었습니다.',
-            2: '위치 정보를 가져올 수 없습니다.',
-            3: '위치 요청 시간이 초과되었습니다.',
+            1: '위치 접근 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해 주세요.',
+            2: '위치 정보를 가져올 수 없습니다. 인터넷 연결을 확인해 주세요.',
+            3: '위치 요청 시간이 초과되었습니다. 다시 시도해 주세요.',
           };
           reject(new Error(messages[err.code] || err.message));
         },
@@ -93,7 +97,18 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
     setError(null);
     try {
       const params = new URLSearchParams({ lat: coords.lat, lng: coords.lng, radius });
-      const res = await fetch(`/api/naversearch?${params}`);
+
+      // 로컬 개발 환경에서는 Cloudflare Workers가 없으므로 배포된 URL로 우회
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const baseUrl = isLocal ? 'https://lunchpick.pages.dev' : '';
+      const res = await fetch(`${baseUrl}/api/naversearch?${params}`);
+
+      // 응답이 HTML인 경우 (서버가 index.html을 반환하는 경우) 방어
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('식당 검색 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.');
+      }
+
       const data = await res.json();
 
       if (!res.ok) {
@@ -143,5 +158,25 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
     saveRestaurants(filtered);
   }, [rawList, weekMenuSet, saveRestaurants]);
 
-  return { restaurants, location, loading, error, fetchNearby, searchNearby, refilter };
+  // ─── 5. 카테고리 필터 적용 ─────────────────────────────────────────────
+  const filteredRestaurants = selectedCategory === '전체'
+    ? restaurants
+    : restaurants.filter((r) => r.mainCategory === selectedCategory);
+
+  const filterByCategory = useCallback((category) => {
+    setSelectedCategory(category);
+  }, []);
+
+  return {
+    restaurants: filteredRestaurants,
+    allRestaurants: restaurants,
+    location,
+    loading,
+    error,
+    fetchNearby,
+    searchNearby,
+    refilter,
+    selectedCategory,
+    filterByCategory,
+  };
 }

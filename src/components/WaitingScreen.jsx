@@ -107,24 +107,26 @@ function LoadingDots() {
 const styles = {
   bg: {
     minHeight: "100dvh",
-    backgroundColor: "#FFFBEB",
+    background: "var(--bg-gradient)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     padding: "24px 16px",
-    fontFamily: "'Segoe UI', sans-serif",
+    fontFamily: "var(--font-family)",
   },
 
   card: {
     width: "100%",
     maxWidth: "420px",
-    backgroundColor: "#ffffff",
-    borderRadius: "24px",
-    boxShadow: "0 8px 40px rgba(0,0,0,0.10)",
+    background: "var(--bg-card)",
+    border: "1px solid var(--border-card)",
+    borderRadius: "var(--radius-xl)",
+    boxShadow: "var(--shadow-card)",
     padding: "32px 28px",
     display: "flex",
     flexDirection: "column",
     gap: "28px",
+    animation: "fadeInUp 0.4s ease",
   },
 
   /* 상단 */
@@ -142,12 +144,12 @@ const styles = {
     margin: 0,
     fontSize: "26px",
     fontWeight: "800",
-    color: "#1f2937",
+    color: "var(--text-primary)",
   },
   subtitle: {
     margin: 0,
     fontSize: "14px",
-    color: "#9ca3af",
+    color: "var(--text-muted)",
     textAlign: "center",
   },
 
@@ -160,30 +162,30 @@ const styles = {
   progressText: {
     textAlign: "center",
     fontSize: "16px",
-    color: "#374151",
+    color: "var(--text-secondary)",
     fontWeight: "600",
   },
   progressCount: {
     fontSize: "22px",
     fontWeight: "800",
-    color: "#22c55e",
+    color: "var(--accent-green)",
   },
   progressTotal: {
     fontSize: "18px",
     fontWeight: "700",
-    color: "#6b7280",
+    color: "var(--text-muted)",
   },
   progressBarBg: {
     width: "100%",
     height: "10px",
-    backgroundColor: "#e5e7eb",
-    borderRadius: "999px",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: "var(--radius-full)",
     overflow: "hidden",
   },
   progressBarFill: {
     height: "100%",
-    backgroundColor: "#22c55e",
-    borderRadius: "999px",
+    backgroundColor: "var(--accent-green)",
+    borderRadius: "var(--radius-full)",
     transition: "width 0.5s ease",
   },
 
@@ -201,7 +203,8 @@ const styles = {
     alignItems: "center",
     gap: "12px",
     padding: "12px 16px",
-    backgroundColor: "#f9fafb",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    border: "1px solid var(--border-subtle)",
     borderRadius: "12px",
   },
   iconDone: {
@@ -218,20 +221,20 @@ const styles = {
     flex: 1,
     fontSize: "15px",
     fontWeight: "600",
-    color: "#1f2937",
+    color: "var(--text-primary)",
   },
   memberNameWaiting: {
     flex: 1,
     fontSize: "15px",
     fontWeight: "500",
-    color: "#9ca3af",
+    color: "var(--text-muted)",
   },
   doneTag: {
     fontSize: "12px",
     fontWeight: "700",
-    color: "#22c55e",
-    backgroundColor: "#dcfce7",
-    borderRadius: "999px",
+    color: "var(--accent-green)",
+    backgroundColor: "rgba(34,197,94,0.15)",
+    borderRadius: "var(--radius-full)",
     padding: "2px 10px",
     flexShrink: 0,
   },
@@ -245,7 +248,7 @@ const styles = {
   },
   loaderLabel: {
     fontSize: "13px",
-    color: "#9ca3af",
+    color: "var(--text-muted)",
     fontWeight: "500",
   },
   dots: {
@@ -258,7 +261,7 @@ const styles = {
     width: "7px",
     height: "7px",
     borderRadius: "50%",
-    backgroundColor: "#f97316",
+    backgroundColor: "var(--accent-orange)",
     transition: "opacity 0.2s ease, transform 0.2s ease",
   },
 };

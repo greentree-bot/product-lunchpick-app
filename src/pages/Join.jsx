@@ -37,7 +37,7 @@ export default function Join() {
     try {
       await joinTeam(code, memberName.trim());
       // 투표 마감된 경우 결과 화면으로, 아니면 투표 화면으로
-      navigate(isVotingClosed ? '/result' : '/vote');
+      navigate(isVotingClosed ? '/vote' : '/vote');
     } catch {
       // error는 useTeam에서 관리
     }
@@ -45,113 +45,170 @@ export default function Join() {
 
   if (fetchError) {
     return (
-      <div style={styles.container}>
-        <h1 style={styles.title}>🍽️ 런치픽</h1>
-        <p style={{ color: 'red' }}>{fetchError}</p>
-        <button style={styles.btnGhost} onClick={() => navigate('/')}>
-          홈으로
-        </button>
-      </div>
+      <Page>
+        <div style={s.logoMark}>🍽️</div>
+        <h1 style={s.logoText}>LunchPick</h1>
+        <div style={s.card}>
+          <p style={s.errorText}>❌ {fetchError}</p>
+          <button style={s.btnPrimary} onClick={() => navigate('/')}>
+            홈으로 돌아가기
+          </button>
+        </div>
+      </Page>
     );
   }
 
   if (!team) {
     return (
-      <div style={styles.container}>
-        <p>팀 정보를 불러오는 중...</p>
-      </div>
+      <Page>
+        <div style={s.logoMark}>🍽️</div>
+        <h1 style={s.logoText}>LunchPick</h1>
+        <p style={s.loadingText}>팀 정보를 불러오는 중...</p>
+      </Page>
     );
   }
 
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>🍽️ 런치픽</h1>
-      <div style={styles.card}>
-        <p style={{ color: '#999', margin: '0 0 0.25rem', fontSize: '0.85rem' }}>초대받은 팀</p>
-        <h2 style={{ margin: '0 0 0.75rem', fontSize: '1.5rem' }}>{team.name}</h2>
+    <Page>
+      <div style={s.logoMark}>🍽️</div>
+      <h1 style={s.logoText}>LunchPick</h1>
+
+      <div style={s.card}>
+        <p style={s.labelText}>초대받은 팀</p>
+        <h2 style={s.teamName}>{team.name}</h2>
 
         {isVotingClosed && (
-          <div style={styles.closedNotice}>
+          <div style={s.closedNotice}>
             🔒 이 팀의 투표가 이미 마감됐어요.<br />
             이름을 입력하고 참여하면 결과를 확인할 수 있어요.
           </div>
         )}
 
-        <form onSubmit={handleJoin} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <form onSubmit={handleJoin} style={s.form}>
           <input
-            style={styles.input}
+            style={s.input}
             placeholder="내 이름을 입력하세요"
             value={memberName}
             onChange={(e) => setMemberName(e.target.value)}
             autoFocus
             required
           />
-          {error && <p style={{ color: 'red', margin: 0 }}>{error}</p>}
-          <button style={styles.btnPrimary} type="submit" disabled={loading}>
+          {error && <p style={s.errMsg}>{error}</p>}
+          <button style={s.btnPrimary} type="submit" disabled={loading}>
             {loading ? '참여 중...' : isVotingClosed ? '결과 확인하기' : `${team.name} 팀 참여하기`}
           </button>
         </form>
+      </div>
+    </Page>
+  );
+}
+
+// ─── 공통 배경 wrapper (Home과 동일한 다크 테마) ───
+function Page({ children }) {
+  return (
+    <div style={s.page}>
+      <div style={s.glowOrange} aria-hidden="true" />
+      <div style={s.glowPurple} aria-hidden="true" />
+      <div style={s.scroll}>
+        <div style={s.inner}>{children}</div>
       </div>
     </div>
   );
 }
 
-const styles = {
-  container: {
+const s = {
+  page: {
     minHeight: '100vh',
+    background: 'var(--bg-gradient)',
+    position: 'relative',
+    fontFamily: 'var(--font-family)',
+  },
+  glowOrange: {
+    position: 'fixed', top: '-8%', right: '-8%',
+    width: '45vw', height: '45vw', borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(255,107,53,0.18) 0%, transparent 65%)',
+    pointerEvents: 'none', zIndex: 0,
+  },
+  glowPurple: {
+    position: 'fixed', bottom: '-8%', left: '-8%',
+    width: '40vw', height: '40vw', borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(99,102,241,0.14) 0%, transparent 65%)',
+    pointerEvents: 'none', zIndex: 0,
+  },
+  scroll: {
+    position: 'relative', zIndex: 1,
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '3rem 1.25rem',
+    boxSizing: 'border-box',
+  },
+  inner: {
+    width: '100%',
+    maxWidth: '400px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: '2rem',
-    fontFamily: 'sans-serif',
   },
-  title: { fontSize: '2rem', margin: '0 0 1.5rem' },
+
+  logoMark: { fontSize: '3.2rem', lineHeight: 1, marginBottom: '0.4rem' },
+  logoText: {
+    margin: '0 0 1.5rem', fontSize: '2.4rem', fontWeight: '800',
+    color: '#ffffff', letterSpacing: '-0.02em',
+  },
+
   card: {
-    background: '#fff',
-    border: '1px solid #eee',
-    borderRadius: '12px',
-    padding: '1.5rem',
     width: '100%',
-    maxWidth: '360px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    background: 'var(--bg-card)',
+    border: '1px solid var(--border-card)',
+    borderRadius: 'var(--radius-lg)',
+    padding: '1.75rem 1.5rem',
+    display: 'flex', flexDirection: 'column', gap: '0',
+    animation: 'fadeInUp 0.4s ease',
   },
-  input: {
-    padding: '0.75rem',
-    fontSize: '1rem',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    outline: 'none',
-    width: '100%',
-    boxSizing: 'border-box',
+
+  labelText: {
+    color: 'var(--text-muted)', margin: '0 0 0.25rem', fontSize: '0.85rem',
   },
-  btnPrimary: {
-    padding: '0.75rem',
-    fontSize: '1rem',
-    background: '#ff6b35',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontWeight: 'bold',
+  teamName: {
+    margin: '0 0 1rem', fontSize: '1.5rem', fontWeight: '800', color: 'var(--text-primary)',
   },
-  btnGhost: {
-    marginTop: '1rem',
-    padding: '0.5rem',
-    fontSize: '0.9rem',
-    background: 'transparent',
-    color: '#999',
-    border: 'none',
-    cursor: 'pointer',
-  },
+
   closedNotice: {
     fontSize: '0.85rem',
-    color: '#92400e',
-    background: '#fffbeb',
-    border: '1px solid #fde68a',
-    borderRadius: '8px',
+    color: '#fbbf24',
+    background: 'rgba(251,191,36,0.1)',
+    border: '1px solid rgba(251,191,36,0.25)',
+    borderRadius: 'var(--radius-sm)',
     padding: '0.7rem 0.9rem',
     marginBottom: '0.75rem',
     lineHeight: 1.6,
+  },
+
+  form: { display: 'flex', flexDirection: 'column', gap: '0.75rem' },
+  input: {
+    padding: '0.9rem 1rem', fontSize: '1rem',
+    background: 'var(--bg-input)',
+    border: '1px solid var(--border-input)',
+    borderRadius: '11px', color: 'var(--text-primary)', outline: 'none',
+    width: '100%', boxSizing: 'border-box',
+  },
+  errMsg: { margin: 0, fontSize: '0.84rem', color: '#fca5a5' },
+  errorText: {
+    color: '#fca5a5', fontSize: '0.95rem', textAlign: 'center',
+    marginBottom: '1rem',
+  },
+  loadingText: {
+    color: 'var(--text-muted)', fontSize: '0.95rem',
+    animation: 'pulse 1.5s infinite',
+  },
+  btnPrimary: {
+    width: '100%', padding: '1rem', fontSize: '1rem', fontWeight: '700',
+    background: 'var(--accent-gradient)',
+    color: '#fff', border: 'none', borderRadius: 'var(--radius-md)',
+    cursor: 'pointer',
+    boxShadow: 'var(--shadow-glow-orange)',
+    letterSpacing: '0.01em',
   },
 };

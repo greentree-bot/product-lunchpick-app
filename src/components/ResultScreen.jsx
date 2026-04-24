@@ -6,15 +6,16 @@ import { supabase } from "../lib/supabase";
  * ResultScreen
  *
  * Props:
- *   roomId      string           — 현재 투표방 ID
+ *   teamId      string           — 현재 투표방 ID (null이면 솔로 모드)
  *   results     Array<{          — 집계된 메뉴별 결과
  *     name: string,
  *     ok:   number,
  *     pass: number,
  *   }>
  *   onRestart   () => void       — "다시 투표하기" 콜백
+ *   isSolo      boolean          — 솔로 모드 여부
  */
-export default function ResultScreen({ teamId, results = [], onRestart }) {
+export default function ResultScreen({ teamId, results = [], onRestart, isSolo = false }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -57,6 +58,13 @@ export default function ResultScreen({ teamId, results = [], onRestart }) {
   /* history 테이블에 저장 */
   const handleSave = async () => {
     if (!winner || saving || saved) return;
+
+    // 솔로 모드에서는 DB 저장 없이 성공 표시
+    if (isSolo || !teamId) {
+      setSaved(true);
+      return;
+    }
+
     setSaving(true);
     setSaveError(null);
 
@@ -77,7 +85,7 @@ export default function ResultScreen({ teamId, results = [], onRestart }) {
   if (!winner) {
     return (
       <div style={styles.bg}>
-        <p style={{ color: "#9ca3af", fontSize: "16px" }}>결과가 없습니다.</p>
+        <p style={{ color: "var(--text-muted)", fontSize: "16px" }}>결과가 없습니다.</p>
       </div>
     );
   }
@@ -88,7 +96,9 @@ export default function ResultScreen({ teamId, results = [], onRestart }) {
         {/* ── 1등 카드 ── */}
         <div style={styles.winnerCard}>
           <span style={styles.trophy}>🏆</span>
-          <p style={styles.winnerLabel}>오늘의 점심은</p>
+          <p style={styles.winnerLabel}>
+            {isSolo ? '오늘의 선택은' : '오늘의 점심은'}
+          </p>
           <h1 style={styles.winnerName}>{winner.name}!</h1>
           <VoteBar ok={winner.ok} pass={winner.pass} large />
         </div>
@@ -100,7 +110,10 @@ export default function ResultScreen({ teamId, results = [], onRestart }) {
             <ol style={styles.rankList}>
               {sorted.map((menu, idx) => (
                 <li key={menu.name} style={styles.rankItem}>
-                  <span style={styles.rankIndex}>{idx + 1}</span>
+                  <span style={{
+                    ...styles.rankIndex,
+                    ...(idx === 0 ? styles.rankIndexFirst : {}),
+                  }}>{idx + 1}</span>
                   <div style={styles.rankContent}>
                     <span style={styles.rankMenuName}>{menu.name}</span>
                     <VoteBar ok={menu.ok} pass={menu.pass} />
@@ -110,6 +123,16 @@ export default function ResultScreen({ teamId, results = [], onRestart }) {
             </ol>
           </div>
         )}
+
+        {/* ── 네이버 지도 링크 ── */}
+        <a
+          href={`https://map.naver.com/v5/search/${encodeURIComponent(winner.name)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={styles.mapLink}
+        >
+          🗺️ 네이버 지도에서 보기
+        </a>
 
         {/* ── 버튼 영역 ── */}
         <div style={styles.buttonRow}>
@@ -145,10 +168,10 @@ function VoteBar({ ok, pass, large = false }) {
     <div style={{ width: "100%", marginTop: large ? "16px" : "8px" }}>
       {/* 레이블 */}
       <div style={barStyles.labels}>
-        <span style={{ ...barStyles.label, color: "#22c55e" }}>
+        <span style={{ ...barStyles.label, color: "var(--accent-green)" }}>
           👍 OK {ok}표
         </span>
-        <span style={{ ...barStyles.label, color: "#ef4444" }}>
+        <span style={{ ...barStyles.label, color: "var(--accent-red)" }}>
           👎 PASS {pass}표
         </span>
       </div>
@@ -160,7 +183,7 @@ function VoteBar({ ok, pass, large = false }) {
               ...barStyles.okFill,
               width: `${okPct}%`,
               height: "100%",
-              borderRadius: passPct === 0 ? "999px" : "999px 0 0 999px",
+              borderRadius: passPct === 0 ? "var(--radius-full)" : "999px 0 0 999px",
             }}
           />
         )}
@@ -170,14 +193,14 @@ function VoteBar({ ok, pass, large = false }) {
               ...barStyles.passFill,
               width: `${passPct}%`,
               height: "100%",
-              borderRadius: okPct === 0 ? "999px" : "0 999px 999px 0",
+              borderRadius: okPct === 0 ? "var(--radius-full)" : "0 999px 999px 0",
             }}
           />
         )}
       </div>
       <div style={barStyles.pctRow}>
-        <span style={{ color: "#22c55e", fontSize: "12px", fontWeight: 600 }}>{okPct}%</span>
-        <span style={{ color: "#ef4444", fontSize: "12px", fontWeight: 600 }}>{passPct}%</span>
+        <span style={{ color: "var(--accent-green)", fontSize: "12px", fontWeight: 600 }}>{okPct}%</span>
+        <span style={{ color: "var(--accent-red)", fontSize: "12px", fontWeight: 600 }}>{passPct}%</span>
       </div>
     </div>
   );
@@ -187,11 +210,11 @@ function VoteBar({ ok, pass, large = false }) {
 const styles = {
   bg: {
     minHeight: "100dvh",
-    backgroundColor: "#ffffff",
+    background: "var(--bg-gradient)",
     display: "flex",
     justifyContent: "center",
     padding: "32px 16px 48px",
-    fontFamily: "'Segoe UI', sans-serif",
+    fontFamily: "var(--font-family)",
   },
   inner: {
     width: "100%",
@@ -199,6 +222,7 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: "24px",
+    animation: "fadeInUp 0.5s ease",
   },
 
   /* 1등 카드 */
@@ -207,43 +231,44 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     padding: "32px 28px 28px",
-    border: "3px solid #f59e0b",
-    borderRadius: "24px",
-    background: "linear-gradient(145deg, #fffbeb 0%, #ffffff 100%)",
-    boxShadow: "0 6px 32px rgba(245,158,11,0.18)",
+    border: "2px solid rgba(245,158,11,0.4)",
+    borderRadius: "var(--radius-xl)",
+    background: "linear-gradient(145deg, rgba(245,158,11,0.12) 0%, rgba(255,255,255,0.05) 100%)",
+    boxShadow: "0 6px 32px rgba(245,158,11,0.15)",
     textAlign: "center",
   },
   trophy: {
     fontSize: "64px",
     lineHeight: 1,
     marginBottom: "8px",
-    filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.15))",
+    filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.3))",
   },
   winnerLabel: {
     margin: "0 0 4px",
     fontSize: "15px",
-    color: "#92400e",
+    color: "var(--accent-amber)",
     fontWeight: 600,
   },
   winnerName: {
     margin: 0,
     fontSize: "clamp(28px, 7vw, 42px)",
     fontWeight: "900",
-    color: "#1f2937",
+    color: "var(--text-primary)",
     letterSpacing: "-0.5px",
   },
 
   /* 순위 리스트 */
   rankSection: {
-    backgroundColor: "#f9fafb",
-    borderRadius: "20px",
+    backgroundColor: "var(--bg-card)",
+    border: "1px solid var(--border-card)",
+    borderRadius: "var(--radius-lg)",
     padding: "20px 20px 16px",
   },
   rankTitle: {
     margin: "0 0 16px",
     fontSize: "15px",
     fontWeight: "700",
-    color: "#6b7280",
+    color: "var(--text-muted)",
     textTransform: "uppercase",
     letterSpacing: "1px",
   },
@@ -265,14 +290,18 @@ const styles = {
     width: "28px",
     height: "28px",
     borderRadius: "50%",
-    backgroundColor: "#e5e7eb",
+    backgroundColor: "rgba(255,255,255,0.1)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     fontSize: "13px",
     fontWeight: "800",
-    color: "#374151",
+    color: "var(--text-secondary)",
     marginTop: "2px",
+  },
+  rankIndexFirst: {
+    background: "var(--accent-gradient)",
+    color: "#fff",
   },
   rankContent: {
     flex: 1,
@@ -283,7 +312,21 @@ const styles = {
   rankMenuName: {
     fontSize: "15px",
     fontWeight: "700",
-    color: "#1f2937",
+    color: "var(--text-primary)",
+  },
+
+  /* 네이버 지도 링크 */
+  mapLink: {
+    display: "block",
+    textAlign: "center",
+    padding: "12px",
+    background: "rgba(3,199,90,0.1)",
+    border: "1px solid rgba(3,199,90,0.25)",
+    borderRadius: "var(--radius-md)",
+    color: "#4ade80",
+    fontSize: "14px",
+    fontWeight: "600",
+    textDecoration: "none",
   },
 
   /* 버튼 */
@@ -297,10 +340,10 @@ const styles = {
     padding: "16px",
     fontSize: "16px",
     fontWeight: "700",
-    backgroundColor: "#f3f4f6",
-    color: "#374151",
-    border: "none",
-    borderRadius: "14px",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    border: "1px solid var(--border-card)",
+    color: "var(--text-secondary)",
+    borderRadius: "var(--radius-md)",
     cursor: "pointer",
   },
   saveBtn: {
@@ -308,16 +351,16 @@ const styles = {
     padding: "16px",
     fontSize: "16px",
     fontWeight: "700",
-    backgroundColor: "#f97316",
+    background: "var(--accent-gradient)",
     color: "#ffffff",
     border: "none",
-    borderRadius: "14px",
+    borderRadius: "var(--radius-md)",
     cursor: "pointer",
-    boxShadow: "0 4px 14px rgba(249,115,22,0.35)",
+    boxShadow: "var(--shadow-glow-orange)",
   },
   errorText: {
     textAlign: "center",
-    color: "#ef4444",
+    color: "var(--accent-red)",
     fontSize: "13px",
     margin: 0,
   },
@@ -336,16 +379,16 @@ const barStyles = {
   track: {
     display: "flex",
     width: "100%",
-    backgroundColor: "#f3f4f6",
-    borderRadius: "999px",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: "var(--radius-full)",
     overflow: "hidden",
   },
   okFill: {
-    backgroundColor: "#22c55e",
+    backgroundColor: "var(--accent-green)",
     transition: "width 0.6s ease",
   },
   passFill: {
-    backgroundColor: "#ef4444",
+    backgroundColor: "var(--accent-red)",
     transition: "width 0.6s ease",
   },
   pctRow: {
