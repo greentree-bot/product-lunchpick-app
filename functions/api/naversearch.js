@@ -187,20 +187,21 @@ export async function onRequestGet(context) {
     });
   }
 
-  // ─── 5. 반경 내 필터 → 부족 시 자동 확장 (1km → 2km → 3km) ────────────
-  const EXPAND_STEPS = [radius, 2000, 3000];
+  // ─── 5. 반경 내 필터 → 결과 없으면 5km로 확장 ───────────────────────────
+  const EXPAND_STEPS = [radius, 5000];
   let documents = [];
   let usedRadius = radius;
 
   for (const r of EXPAND_STEPS) {
     documents = allDocs.filter((d) => d.distance <= r);
     usedRadius = r;
-    if (documents.length >= 5) break;
+    if (documents.length > 0) break;
   }
 
-  // naverRank(리뷰 많은 순) 정렬 → 상위 20개
+  // naverRank(리뷰 많은 순) 정렬 → 1km 이내: 상위 20개, 5km 확장: 상위 10개
   documents.sort((a, b) => a.naverRank - b.naverRank);
-  const top20 = documents.slice(0, maxResults);
+  const returnCount = usedRadius > radius ? 10 : maxResults;
+  const top20 = documents.slice(0, returnCount);
 
   // distance를 문자열로 변환 (기존 클라이언트 호환)
   const top20Str = top20.map((d) => ({ ...d, distance: String(d.distance) }));
