@@ -187,26 +187,17 @@ export async function onRequestGet(context) {
     });
   }
 
-  // ─── 5. 반경 내 필터 → 결과 없으면 5km로 확장 ───────────────────────────
-  const EXPAND_STEPS = [radius, 5000];
-  let documents = [];
-  let usedRadius = radius;
+  // ─── 5. 반경 내 필터 → 상위 10개 반환 ──────────────────────────────────
+  let documents = allDocs.filter((d) => d.distance <= radius);
 
-  for (const r of EXPAND_STEPS) {
-    documents = allDocs.filter((d) => d.distance <= r);
-    usedRadius = r;
-    if (documents.length > 0) break;
-  }
-
-  // naverRank(리뷰 많은 순) 정렬 → 1km 이내: 상위 20개, 5km 확장: 상위 10개
+  // naverRank(리뷰 많은 순) 정렬 → 상위 10개
   documents.sort((a, b) => a.naverRank - b.naverRank);
-  const returnCount = usedRadius > radius ? 10 : maxResults;
-  const top20 = documents.slice(0, returnCount);
+  const top20 = documents.slice(0, 10);
 
   // distance를 문자열로 변환 (기존 클라이언트 호환)
   const top20Str = top20.map((d) => ({ ...d, distance: String(d.distance) }));
 
-  console.log(`[naversearch] 반경 ${usedRadius}m 내 ${documents.length}개 → ${top20Str.length}개 반환`);
+  console.log(`[naversearch] 반경 ${radius}m 내 ${documents.length}개 → ${top20Str.length}개 반환`);
 
   return jsonRes({ documents: top20Str });
 }

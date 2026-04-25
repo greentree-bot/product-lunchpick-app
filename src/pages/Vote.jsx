@@ -36,7 +36,7 @@ export default function Vote() {
   const [toastMsg, setToastMsg] = useState('');
 
   const { votes, weekMenuSet, loading: loadingVotes, castVote, clearVotes, cancelVote, cancelPass, okCountByMenu, passCountByMenu } = useVotes(teamId);
-  const { restaurants, allRestaurants, loading: loadingRestaurants, error: locationError, fetchNearby, selectedCategory, filterByCategory } = useNearbyRestaurants(weekMenuSet);
+  const { restaurants, allRestaurants, loading: loadingRestaurants, error: locationError, fetchNearby, selectedCategory, filterByCategory } = useNearbyRestaurants(weekMenuSet, 5000);
   const { settings, updateSettings, saving, deadlineDisplay, memberCount } = useTeamSettings(teamId);
   const { changeName } = useTeam();
 
@@ -265,7 +265,7 @@ export default function Vote() {
       <main style={st.main}>
         {restaurants.length === 0 ? (
           <div style={st.searchSection}>
-            <p style={st.searchDesc}>📍 현재 위치를 기반으로 반경 1km 내 식당을 검색합니다.</p>
+            <p style={st.searchDesc}>📍 현재 위치를 기반으로 반경 5km 내 식당을 검색합니다.</p>
             <button style={st.btnPrimary} onClick={fetchNearby} disabled={loadingRestaurants}>
               {loadingRestaurants ? '검색 중...' : '📍 내 주변 식당 찾기'}
             </button>
