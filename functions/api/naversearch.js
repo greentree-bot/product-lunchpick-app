@@ -69,6 +69,7 @@ export async function onRequestGet(context) {
   // ─── 1. Nominatim 역지오코딩 → 동(fine) + 구(broad) ────────────────────
   let areaFine = '';   // 동 레벨: 역삼동
   let areaBroad = '';  // 구 레벨: 강남구
+  let areaCity = '';   // 시 레벨: 인천광역시 (fallback용)
 
   try {
     const nomRes = await fetch(
@@ -90,8 +91,9 @@ export async function onRequestGet(context) {
       // 동 레벨: 법정동(suburb) 우선, 없으면 행정동(quarter/neighbourhood)
       areaFine = stripNum(addr.suburb || addr.quarter || addr.neighbourhood || '');
 
-      // 구 레벨: city_district (서울/부산 등) 또는 county (경기도 시군)
-      areaBroad = addr.city_district || addr.county || addr.town || '';
+      // 구 레벨: city_district(서울) > borough(인천 등) > county(경기) > town > city
+      areaBroad = addr.city_district || addr.borough || addr.county || addr.town || '';
+      areaCity = addr.city || addr.municipality || '';
 
       console.log('[naversearch] 역지오코딩 → 동:', areaFine, '| 구:', areaBroad, '| raw:', JSON.stringify(addr));
     }
@@ -123,9 +125,10 @@ export async function onRequestGet(context) {
     FOOD_CATS.forEach((cat) => searches.push(naverSearch(`${areaFine} ${cat}`, 1, naverHeaders)));
   }
 
-  // 둘 다 없으면 fallback
+  // 둘 다 없으면 도시명 또는 전국 fallback
   if (searches.length === 0) {
-    [1, 6, 11, 16].forEach((s) => searches.push(naverSearch('음식점', s, naverHeaders)));
+    const fallbackTerm = areaCity ? `${areaCity} 음식점` : '음식점';
+    [1, 6, 11, 16].forEach((s) => searches.push(naverSearch(fallbackTerm, s, naverHeaders)));
   }
 
   const results = await Promise.all(searches);
@@ -187,8 +190,11 @@ export async function onRequestGet(context) {
     });
   }
 
-  // ─── 5. 반경 내 필터 → 상위 10개 반환 ──────────────────────────────────
+  // ─── 5. 반경 내 필터 → 결과 없으면 10km까지 확장 ───────────────────────
   let documents = allDocs.filter((d) => d.distance <= radius);
+  if (documents.length === 0) {
+    documents = allDocs.filter((d) => d.distance <= 10000);
+  }
 
   // naverRank(리뷰 많은 순) 정렬 → 상위 10개
   documents.sort((a, b) => a.naverRank - b.naverRank);
