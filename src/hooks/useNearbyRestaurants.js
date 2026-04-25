@@ -51,7 +51,7 @@ function saveSession(key, data) {
 
 // ─── 훅 ──────────────────────────────────────────────────────────────────────
 
-export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
+export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000, provider = 'naver') {
   const [restaurants, setRestaurants] = useState(() => loadSession(SESSION_RESTAURANTS));
   const [rawList, setRawList] = useState(() => loadSession(SESSION_RAWLIST));
   const [location, setLocation] = useState(null);
@@ -101,7 +101,8 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
       // 로컬 개발 환경에서는 Cloudflare Workers가 없으므로 배포된 URL로 우회
       const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       const baseUrl = isLocal ? 'https://lunchpick.pages.dev' : '';
-      const res = await fetch(`${baseUrl}/api/naversearch?${params}`);
+      const endpoint = provider === 'kakao' ? 'kakaosearch' : 'naversearch';
+      const res = await fetch(`${baseUrl}/api/${endpoint}?${params}`);
 
       // 응답이 HTML인 경우 (서버가 index.html을 반환하는 경우) 방어
       const contentType = res.headers.get('content-type') || '';
@@ -134,7 +135,7 @@ export function useNearbyRestaurants(weekMenuSet = new Set(), radius = 1000) {
     } finally {
       setLoading(false);
     }
-  }, [radius, weekMenuSet, saveRawList, saveRestaurants]);
+  }, [radius, weekMenuSet, saveRawList, saveRestaurants, provider]);
 
   // ─── 3. 위치 + 검색 통합 실행 ──────────────────────────────────────────
   const fetchNearby = useCallback(async () => {

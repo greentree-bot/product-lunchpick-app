@@ -25,6 +25,10 @@ export default function Vote() {
   const [currentMemberName, setCurrentMemberName] = useState(memberName);
   const [voteHistory, setVoteHistory] = useState([]); // 되돌리기용
 
+  const [searchProvider, setSearchProvider] = useState(() =>
+    localStorage.getItem('lunchpick_provider') || 'naver'
+  );
+
   const [showInvite, setShowInvite] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -36,7 +40,7 @@ export default function Vote() {
   const [toastMsg, setToastMsg] = useState('');
 
   const { votes, weekMenuSet, loading: loadingVotes, castVote, clearVotes, cancelVote, cancelPass, okCountByMenu, passCountByMenu } = useVotes(teamId);
-  const { restaurants, allRestaurants, loading: loadingRestaurants, error: locationError, fetchNearby, selectedCategory, filterByCategory } = useNearbyRestaurants(weekMenuSet, 5000);
+  const { restaurants, allRestaurants, loading: loadingRestaurants, error: locationError, fetchNearby, selectedCategory, filterByCategory } = useNearbyRestaurants(weekMenuSet, 5000, searchProvider);
   const { settings, updateSettings, saving, deadlineDisplay, memberCount } = useTeamSettings(teamId);
   const { changeName } = useTeam();
 
@@ -265,6 +269,20 @@ export default function Vote() {
       <main style={st.main}>
         {restaurants.length === 0 ? (
           <div style={st.searchSection}>
+            <div style={st.providerToggle}>
+              <button
+                style={searchProvider === 'naver' ? st.providerActive : st.providerBtn}
+                onClick={() => { setSearchProvider('naver'); localStorage.setItem('lunchpick_provider', 'naver'); }}
+              >
+                네이버지도
+              </button>
+              <button
+                style={searchProvider === 'kakao' ? st.providerActive : st.providerBtn}
+                onClick={() => { setSearchProvider('kakao'); localStorage.setItem('lunchpick_provider', 'kakao'); }}
+              >
+                카카오맵
+              </button>
+            </div>
             <p style={st.searchDesc}>📍 현재 위치를 기반으로 반경 5km 내 식당을 검색합니다.</p>
             <button style={st.btnPrimary} onClick={fetchNearby} disabled={loadingRestaurants}>
               {loadingRestaurants ? '검색 중...' : '📍 내 주변 식당 찾기'}
@@ -325,6 +343,9 @@ const st = {
   openBanner: { background: 'rgba(255,107,53,0.1)', borderBottom: '1px solid rgba(255,107,53,0.2)', padding: '0.5rem 1.5rem', fontSize: '0.85rem', color: 'var(--accent-orange)', textAlign: 'center' },
   main: { padding: '1.5rem 1rem', maxWidth: '520px', margin: '0 auto' },
   searchSection: { display: 'flex', flexDirection: 'column', gap: '0.75rem' },
+  providerToggle: { display: 'flex', gap: '0.5rem', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: '0.25rem', alignSelf: 'center' },
+  providerBtn: { flex: 1, padding: '0.45rem 1rem', fontSize: '0.9rem', fontWeight: '600', background: 'transparent', color: 'var(--text-muted)', border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'all 0.15s' },
+  providerActive: { flex: 1, padding: '0.45rem 1rem', fontSize: '0.9rem', fontWeight: '700', background: 'var(--accent-gradient)', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', boxShadow: '0 2px 8px rgba(255,107,53,0.3)' },
   searchDesc: { fontSize: '0.85rem', color: 'var(--text-secondary)', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', padding: '0.6rem 0.9rem', border: '1px solid var(--border-subtle)', margin: 0 },
   voteSection: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' },
   voteGuide: { fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0, textAlign: 'center' },
