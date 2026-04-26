@@ -257,7 +257,7 @@ const s = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '3rem 1.25rem',
+    padding: '1.5rem 1.25rem',
     boxSizing: 'border-box',
   },
   inner: {
@@ -269,40 +269,40 @@ const s = {
   },
 
   /* 로고 */
-  logoMark: { fontSize: '3.2rem', lineHeight: 1, marginBottom: '0.4rem' },
+  logoMark: { fontSize: '2.4rem', lineHeight: 1, marginBottom: '0.3rem' },
   logoText: {
-    margin: '0 0 0.4rem', fontSize: '2.4rem', fontWeight: '800',
+    margin: '0 0 0.3rem', fontSize: '1.9rem', fontWeight: '800',
     color: '#ffffff', letterSpacing: '-0.02em',
   },
   logoSub: {
-    margin: '0 0 2.5rem', fontSize: '0.95rem',
+    margin: '0 0 1.5rem', fontSize: '0.88rem',
     color: 'var(--text-muted)', textAlign: 'center',
   },
 
   /* STEP 리스트 */
   steps: {
     width: '100%', display: 'flex', flexDirection: 'column',
-    gap: '0.55rem', marginBottom: '2rem',
+    gap: '0.4rem', marginBottom: '1.25rem',
   },
   stepRow: {
-    display: 'flex', alignItems: 'center', gap: '0.85rem',
+    display: 'flex', alignItems: 'center', gap: '0.7rem',
     background: 'var(--bg-card)',
     border: '1px solid var(--border-subtle)',
-    borderRadius: 'var(--radius-md)', padding: '0.85rem 1rem',
+    borderRadius: 'var(--radius-md)', padding: '0.6rem 0.85rem',
   },
   stepNum: {
-    width: '26px', height: '26px', borderRadius: '50%', flexShrink: 0,
+    width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0,
     background: 'var(--accent-gradient)',
-    color: '#fff', fontSize: '0.8rem', fontWeight: '800',
+    color: '#fff', fontSize: '0.72rem', fontWeight: '800',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
-  stepIcon: { fontSize: '1.35rem', flexShrink: 0 },
-  stepTitle: { fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '0.1rem' },
-  stepDesc:  { fontSize: '0.76rem', color: 'var(--text-muted)' },
+  stepIcon: { fontSize: '1.1rem', flexShrink: 0 },
+  stepTitle: { fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '0.05rem' },
+  stepDesc:  { fontSize: '0.7rem', color: 'var(--text-muted)' },
 
   /* 버튼 묶음 */
   btnStack: {
-    width: '100%', display: 'flex', flexDirection: 'column', gap: '0.7rem',
+    width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem',
   },
 
   /* 카드 */
@@ -349,16 +349,16 @@ const s = {
 
   /* ─ 버튼들 ─ */
   btnPrimary: {
-    width: '100%', padding: '1rem', fontSize: '1rem', fontWeight: '700',
+    width: '100%', padding: '0.75rem', fontSize: '0.95rem', fontWeight: '700',
     background: 'var(--accent-gradient)',
     color: '#fff', border: 'none', borderRadius: 'var(--radius-md)',
-    cursor: 'pointer', marginBottom: '0.6rem',
+    cursor: 'pointer', marginBottom: '0',
     boxShadow: 'var(--shadow-glow-orange)',
     letterSpacing: '0.01em',
     transition: 'transform 0.15s ease, box-shadow 0.15s ease',
   },
   btnOutline: {
-    width: '100%', padding: '0.9rem', fontSize: '0.97rem', fontWeight: '600',
+    width: '100%', padding: '0.7rem', fontSize: '0.92rem', fontWeight: '600',
     background: 'var(--bg-card)',
     color: 'var(--text-secondary)',
     border: '1.5px solid rgba(255,255,255,0.22)',
@@ -377,7 +377,7 @@ const s = {
     cursor: 'pointer', padding: '0.5rem', marginTop: '0.1rem', alignSelf: 'center',
   },
   btnSolo: {
-    width: '100%', padding: '0.85rem', fontSize: '0.95rem', fontWeight: '600',
+    width: '100%', padding: '0.7rem', fontSize: '0.92rem', fontWeight: '600',
     background: 'rgba(139,92,246,0.15)',
     color: '#c4b5fd',
     border: '1.5px solid rgba(139,92,246,0.3)',
